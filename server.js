@@ -258,6 +258,53 @@ app.post('/api/download', (req, res) => {
   });
 });
 
+// Helper: dynamically find the best available Gemini model for the user's API key
+async function resolveGeminiModel(key) {
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
+    const data = await res.json();
+
+    if (data.models && Array.isArray(data.models)) {
+      console.log('[Gemini] Found available models for this key:', data.models.map(m => m.name));
+      const preferred = [
+        'gemini-2.0-flash',
+        'gemini-2.0-flash-exp',
+        'gemini-1.5-flash-latest',
+        'gemini-1.5-flash-002',
+        'gemini-1.5-flash-001',
+        'gemini-1.5-pro-latest',
+        'gemini-1.5-pro',
+        'gemini-1.5-flash',
+        'gemini-pro'
+      ];
+
+      for (const pref of preferred) {
+        const found = data.models.find(m =>
+          (m.name === `models/${pref}` || m.name === pref) &&
+          m.supportedGenerationMethods?.includes('generateContent')
+        );
+        if (found) {
+          const cleanName = found.name.replace(/^models\//, '');
+          console.log(`[Gemini] Auto-selected best model: ${cleanName}`);
+          return cleanName;
+        }
+      }
+
+      // Any gemini model that supports generateContent
+      const anyGen = data.models.find(m =>
+        m.name?.includes('gemini') &&
+        m.supportedGenerationMethods?.includes('generateContent')
+      );
+      if (anyGen) return anyGen.name.replace(/^models\//, '');
+    } else if (data.error) {
+      console.error('[Gemini] ListModels returned error:', data.error.message);
+    }
+  } catch (err) {
+    console.warn('[Gemini] Model listing error:', err.message);
+  }
+  return 'gemini-1.5-flash-latest';
+}
+
 // API: Generate Shorts using Gemini Flash & FFmpeg
 app.post('/api/generate-shorts', async (req, res) => {
   const { filename, apiKey } = req.body;
@@ -265,6 +312,14 @@ app.post('/api/generate-shorts', async (req, res) => {
 
   if (!key || typeof key !== 'string' || !key.trim()) {
     return res.status(400).json({ error: 'Gemini API key is required. Please provide your API key.' });
+  }
+
+  // Persist key to process.env and .env if not set
+  if (!process.env.GEMINI_API_KEY && key) {
+    process.env.GEMINI_API_KEY = key.trim();
+    try {
+      fs.writeFileSync(path.join(__dirname, '.env'), `GEMINI_API_KEY=${key.trim()}\n`);
+    } catch (e) {}
   }
 
   if (!filename) {
@@ -302,7 +357,7 @@ app.post('/api/generate-shorts', async (req, res) => {
       });
     });
 
-    sendEvent('status', { phase: 'uploading', message: 'Uploading audio to Gemini Flash...' });
+    sendEvent('status', { phase: 'uploading', message: 'Uploading audio to Gemini...' });
 
     // 2. Upload lightweight audio file to Gemini
     uploadedFile = await fileManager.uploadFile(tempAudioPath, {
@@ -310,15 +365,10 @@ app.post('/api/generate-shorts', async (req, res) => {
       displayName: `audio_${filename}`
     });
 
-    sendEvent('status', { phase: 'analyzing', message: 'Gemini is finding viral moments in Hinglish...' });
+    sendEvent('status', { phase: 'analyzing', message: 'Finding viral moments in Hinglish...' });
 
-    // 3. Prompt Gemini Flash with JSON response
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
-      generationConfig: {
-        responseMimeType: 'application/json'
-      }
-    });
+    // 3. Resolve best working model for this API key
+    const detectedModel = await resolveGeminiModel(key.trim());
 
     const prompt = `Analyze this video audio carefully.
 Find 3 to 5 of the most engaging, hilarious, high-energy, or dramatic viral moments suitable for YouTube Shorts (duration between 20 to 55 seconds each).
@@ -327,7 +377,7 @@ STRICT REQUIREMENTS:
 1. Every title MUST be in conversational Hinglish (Hindi written in English alphabets). Examples: "Nischay ka epic reaction jab sab shocked ho gaye", "Yeh twist dekh ke sabki hasi chhoot gayi", "Bhai ne yeh kya bol diya".
 2. Hook must be in Hinglish (e.g. "Wait for the end twist...", "Dhyan se dekho kya hua...").
 3. Timestamps MUST be in format "HH:MM:SS" or "MM:SS" (e.g. "00:01:23").
-4. Return a JSON array of objects with the exact schema:
+4. Return ONLY a JSON array of objects with the exact schema:
 [
   {
     "title": "Hinglish title (under 50 chars, without hashtags)",
@@ -337,20 +387,56 @@ STRICT REQUIREMENTS:
   }
 ]`;
 
-    const result = await model.generateContent([
-      {
-        fileData: {
-          mimeType: uploadedFile.file.mimeType,
-          fileUri: uploadedFile.file.uri
-        }
-      },
-      { text: prompt }
-    ]);
+    // Try detected model, with automatic fallback list if 404 occurs
+    const candidateModels = [
+      detectedModel,
+      'gemini-1.5-flash-latest',
+      'gemini-2.0-flash',
+      'gemini-2.0-flash-exp',
+      'gemini-1.5-flash-002',
+      'gemini-1.5-flash-001',
+      'gemini-1.5-pro-latest',
+      'gemini-1.5-pro'
+    ];
+    const uniqueModels = [...new Set(candidateModels)];
 
-    const responseText = result.response.text();
+    let responseText = '';
+    let lastError = null;
+
+    for (const modelName of uniqueModels) {
+      try {
+        console.log(`[Gemini] Attempting model: ${modelName}`);
+        const model = genAI.getGenerativeModel({ model: modelName });
+        const result = await model.generateContent([
+          {
+            fileData: {
+              mimeType: uploadedFile.file.mimeType,
+              fileUri: uploadedFile.file.uri
+            }
+          },
+          { text: prompt }
+        ]);
+        responseText = result.response.text();
+        if (responseText) {
+          console.log(`[Gemini] Succeeded with model: ${modelName}`);
+          break;
+        }
+      } catch (err) {
+        console.warn(`[Gemini] Model ${modelName} returned: ${err.message}`);
+        lastError = err;
+      }
+    }
+
+    if (!responseText && lastError) {
+      throw lastError;
+    }
+
+    // Parse JSON cleanly, handling markdown code fences if present
     let moments = [];
     try {
-      moments = JSON.parse(responseText);
+      const jsonMatch = responseText.match(/\[\s*\{[\s\S]*\}\s*\]/);
+      const jsonString = jsonMatch ? jsonMatch[0] : responseText;
+      moments = JSON.parse(jsonString);
     } catch (e) {
       console.error('Failed to parse Gemini JSON:', responseText);
       throw new Error('Gemini returned an invalid response format.');
