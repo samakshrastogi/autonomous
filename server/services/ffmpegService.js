@@ -56,38 +56,28 @@ export function buildDrawTextFilters(topText, bottomText, tempFilesTracker, hook
   return filters.join(',');
 }
 
-// Render a single 9:16 vertical Short with 5s retention hook
+// Render a single 9:16 vertical Short (Clean render: NO burned hook or username)
+// Hook and branding are customized in review step and burned on "Apply to Video"
 export async function renderSingleShort({
   videoPath,
   moment,
   cleanSafeTitle,
-  outputShortPath,
-  channelHandle
+  outputShortPath
 }) {
-  const tempRenderFiles = [];
-  const primaryHook = moment.hook || (Array.isArray(moment.suggestedHooks) && moment.suggestedHooks[0]) || '';
-  const drawFilters = buildDrawTextFilters(primaryHook, channelHandle, tempRenderFiles, 5);
-
-  let filterGraph = `split[a][b];[a]scale=180:320:force_original_aspect_ratio=increase,crop=180:320,boxblur=5:2,scale=1080:1920[bg];[b]scale=1080:-1[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2`;
-  if (drawFilters) {
-    filterGraph += `,${drawFilters}`;
-  }
+  // Clean 9:16 vertical render with blurred background (zero burned text or watermark)
+  const filterGraph = `split[a][b];[a]scale=180:320:force_original_aspect_ratio=increase,crop=180:320,boxblur=5:2,scale=1080:1920[bg];[b]scale=1080:-1[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2`;
 
   const ffmpegCmd = `ffmpeg -ss ${moment.start} -to ${moment.end} -i "${videoPath}" -vf "${filterGraph}" -preset ultrafast -c:v libx264 -crf 23 -c:a aac -threads 0 -y "${outputShortPath}"`;
 
   return new Promise((resolve, reject) => {
     exec(ffmpegCmd, (err) => {
-      // Cleanup temp text files
-      for (const f of tempRenderFiles) {
-        try { if (fs.existsSync(f)) fs.unlinkSync(f); } catch (e) {}
-      }
-
       if (err) {
         console.error(`[FFmpeg] Render failed for "${cleanSafeTitle}":`, err.message);
         return reject(err);
       }
 
-      // Save clip metadata alongside video
+      // Save clip metadata alongside video for 5 suggested hooks & branding
+      const primaryHook = moment.hook || (Array.isArray(moment.suggestedHooks) && moment.suggestedHooks[0]) || '';
       const suggestedHooksList = (Array.isArray(moment.suggestedHooks) && moment.suggestedHooks.length > 0)
         ? moment.suggestedHooks.slice(0, 5)
         : (primaryHook ? [primaryHook] : []);
@@ -145,7 +135,7 @@ export async function renderShortsInParallel(moments, videoPath, channelHandle, 
 
       sendEvent('status', {
         phase: 'rendering',
-        message: `Rendering clip ${idx + 1}/${total}: "${cleanSafeTitle}" (9:16, 5s hook, ${moment.duration}s)...`,
+        message: `Rendering clip ${idx + 1}/${total}: "${cleanSafeTitle}" (9:16, ${moment.duration}s)...`,
         current: idx + 1,
         total: total,
         title: cleanSafeTitle
@@ -156,8 +146,7 @@ export async function renderShortsInParallel(moments, videoPath, channelHandle, 
           videoPath,
           moment,
           cleanSafeTitle,
-          outputShortPath,
-          channelHandle
+          outputShortPath
         });
         generatedFiles.push(fileData);
         completedCount++;

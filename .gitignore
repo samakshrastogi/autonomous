@@ -4,5 +4,6 @@ dist-ssr/
 *.local
 *.log
 .DS_Store
+scratch/
 .env
 .env.*
