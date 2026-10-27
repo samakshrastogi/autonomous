@@ -545,6 +545,7 @@ export default function App() {
         channelHandle={channelHandle}
         onBurnText={handleBurnText}
         isProcessing={isBurningText}
+        apiKey={apiKey}
       />
     </div>
   );

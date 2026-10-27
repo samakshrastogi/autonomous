@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Sparkles, AtSign, X, Check, Film, Loader2 } from 'lucide-react';
-
-const HOOK_PRESETS = [
-  "Wait for the end! 😱",
-  "Papa ka reaction dekh ke dang! 😂",
-  "Ye kya ho gaya?! 🤯",
-  "Don't miss this! 🔥"
-];
+import { Sparkles, AtSign, X, Check, Film, Loader2, RotateCw } from 'lucide-react';
 
 const cleanShortTitle = (rawName) => {
   if (!rawName) return '';
   return rawName.replace(/^Short\s*-\s*/i, '').replace(/\.mp4$/i, '');
 };
+
+const DEFAULT_FALLBACK_HOOKS = [
+  "Wait for the end twist! 😱",
+  "Reaction dekh ke hasi nahi rukegi 😂",
+  "Bhai ne yeh kya bol diya?! 🤯",
+  "Dhyan se dekho end me kya hua 👀",
+  "Don't miss the climax! 🔥"
+];
 
 export default function ShortsReviewModal({
   isOpen,
@@ -20,17 +21,63 @@ export default function ShortsReviewModal({
   initialHook,
   channelHandle,
   onBurnText,
-  isProcessing
+  isProcessing,
+  apiKey
 }) {
   const [topText, setTopText] = useState('');
   const [handle, setHandle] = useState('');
+  const [suggestedHooks, setSuggestedHooks] = useState([]);
+  const [loadingHooks, setLoadingHooks] = useState(false);
   const [error, setError] = useState('');
+
+  // Fetch 5 Gemini-generated hook suggestions for this Short
+  const fetchGeminiHooks = async (file) => {
+    if (!file) return;
+    setLoadingHooks(true);
+    try {
+      const res = await fetch('/api/suggest-hooks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename: file.name,
+          title: file.title || file.name,
+          apiKey: apiKey || localStorage.getItem('gemini_api_key') || ''
+        })
+      });
+      const data = await res.json();
+      if (Array.isArray(data.suggestedHooks) && data.suggestedHooks.length > 0) {
+        setSuggestedHooks(data.suggestedHooks.slice(0, 5));
+        return data.suggestedHooks.slice(0, 5);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch Gemini hooks:', err.message);
+    } finally {
+      setLoadingHooks(false);
+    }
+    return DEFAULT_FALLBACK_HOOKS;
+  };
 
   useEffect(() => {
     if (isOpen && shortFile) {
-      setTopText(initialHook || '');
-      setHandle(channelHandle || '');
+      const savedHandle = channelHandle || localStorage.getItem('shorts_channel_handle') || '';
+      setHandle(savedHandle);
       setError('');
+
+      // Check if file already has suggestedHooks from Gemini
+      if (Array.isArray(shortFile.suggestedHooks) && shortFile.suggestedHooks.length > 0) {
+        const hooks = shortFile.suggestedHooks.slice(0, 5);
+        setSuggestedHooks(hooks);
+        setTopText(initialHook || hooks[0] || '');
+      } else {
+        // Fetch fresh 5 suggestions from Gemini
+        fetchGeminiHooks(shortFile).then((hooks) => {
+          if (hooks && hooks.length > 0) {
+            setTopText(initialHook || hooks[0] || '');
+          } else {
+            setTopText(initialHook || DEFAULT_FALLBACK_HOOKS[0]);
+          }
+        });
+      }
     }
   }, [isOpen, shortFile, initialHook, channelHandle]);
 
@@ -55,10 +102,18 @@ export default function ShortsReviewModal({
     }
   };
 
+  const handleRefreshSuggestions = async () => {
+    if (loadingHooks || isProcessing) return;
+    const hooks = await fetchGeminiHooks(shortFile);
+    if (hooks && hooks.length > 0 && !topText.trim()) {
+      setTopText(hooks[0]);
+    }
+  };
+
   const handleApply = async (e) => {
     e.preventDefault();
     if (!topText.trim() && !handle.trim()) {
-      setError('Please provide top hook text or a channel watermark.');
+      setError('Please provide a top title/hook or a channel watermark.');
       return;
     }
 
@@ -96,7 +151,7 @@ export default function ShortsReviewModal({
                 Customize Short & Branding
               </h3>
               <p className="review-header-subtitle">
-                Add viral hook text and channel watermark before publishing
+                Add viral title/hook and channel watermark with live visual preview
               </p>
             </div>
           </div>
@@ -132,7 +187,7 @@ export default function ShortsReviewModal({
                 key={shortFile.url}
               />
 
-              {/* Live Overlay: Top Hook Text (positioned matching video render) */}
+              {/* Live Overlay: Top Hook / Title (Updates live as user types or selects) */}
               {topText.trim() && (
                 <div className="review-top-text-overlay">
                   <div className="review-hook-badge">
@@ -167,38 +222,61 @@ export default function ShortsReviewModal({
               </span>
             </div>
 
-            {/* Top Hook Section */}
+            {/* Hook / Title Section */}
             <div className="review-field-group">
               <div className="review-field-header">
                 <label className="review-field-label">
                   <span className="dot-indicator" style={{ background: '#eab308' }}></span>
-                  <span>Top Hook Text</span>
+                  <span>Hook / Title (Top Text)</span>
                 </label>
-                <span className="review-tag-gold">Hook</span>
+                <span className="review-tag-gold">Title</span>
               </div>
 
               <textarea
                 value={topText}
                 onChange={(e) => setTopText(e.target.value)}
-                placeholder="e.g. Wait for Papa's epic reaction... 😂"
+                placeholder="Type title/hook to see live on video, or click a Gemini suggestion below..."
                 rows={2}
                 disabled={isProcessing}
                 className="review-textarea"
               />
 
-              {/* Quick Suggestion Chips */}
-              <div className="review-hook-chips">
-                {HOOK_PRESETS.map((preset, idx) => (
+              {/* 5 Best Hook Suggestions from Gemini */}
+              <div style={{ marginTop: '0.65rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#facc15', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <Sparkles size={12} color="#facc15" />
+                    5 Best Hooks (Gemini Suggestions)
+                  </span>
                   <button
-                    key={idx}
                     type="button"
-                    disabled={isProcessing}
-                    className="review-chip-btn"
-                    onClick={() => setTopText(preset)}
+                    onClick={handleRefreshSuggestions}
+                    disabled={loadingHooks || isProcessing}
+                    className="review-refresh-btn"
+                    title="Generate 5 new hook suggestions with Gemini"
                   >
-                    {preset}
+                    <RotateCw size={11} className={loadingHooks ? 'spin' : ''} />
+                    <span>{loadingHooks ? 'Generating...' : 'Refresh'}</span>
                   </button>
-                ))}
+                </div>
+
+                <div className="review-hook-chips">
+                  {suggestedHooks.map((hook, idx) => {
+                    const isSelected = topText.trim() === hook.trim();
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        disabled={isProcessing}
+                        className={`review-chip-btn ${isSelected ? 'active-chip' : ''}`}
+                        onClick={() => setTopText(hook)}
+                        title="Click to apply to video"
+                      >
+                        {hook}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 

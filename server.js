@@ -158,6 +158,13 @@ app.get('/api/files', (req, res) => {
           if (entry.isFile() && !entry.name.startsWith('temp_') && (entry.name.endsWith('.mp4') || entry.name.endsWith('.mkv') || entry.name.endsWith('.webm'))) {
             const fullPath = path.join(config.dir, entry.name);
             const stats = fs.statSync(fullPath);
+
+            let meta = {};
+            const metaPath = `${fullPath}.json`;
+            if (fs.existsSync(metaPath)) {
+              try { meta = JSON.parse(fs.readFileSync(metaPath, 'utf8')); } catch (e) {}
+            }
+
             allFiles.push({
               name: entry.name,
               size: stats.size,
@@ -166,7 +173,10 @@ app.get('/api/files', (req, res) => {
               category: config.category,
               categoryLabel: config.label,
               subfolder: config.subfolder,
-              url: `/api/video/${encodeURIComponent(config.subfolder)}/${encodeURIComponent(entry.name)}`
+              url: `/api/video/${encodeURIComponent(config.subfolder)}/${encodeURIComponent(entry.name)}`,
+              title: meta.title || '',
+              hook: meta.hook || '',
+              suggestedHooks: Array.isArray(meta.suggestedHooks) ? meta.suggestedHooks : []
             });
           }
         }
@@ -542,13 +552,21 @@ DO NOT limit to a fixed number: detect as many moments as genuinely exist in the
 STRICT REQUIREMENTS:
 1. Every title MUST be in conversational Hinglish (Hindi written in English alphabets, e.g. "Jethalal ki phir phasi kismat", "Bhai ne yeh kya bol diya", "Reaction dekh ke hasi nahi rukegi").
 2. DO NOT include the word "Short" or "Shorts" in any title.
-3. Hook must be in Hinglish (e.g. "Wait for the end twist...", "Dhyan se dekho kya hua...").
-4. Timestamps MUST be in format "HH:MM:SS" or "MM:SS" (e.g. "00:01:23").
-5. Return ONLY a JSON array of objects with the exact schema:
+3. For each moment, provide "suggestedHooks": an array of EXACTLY 5 best, distinct, high-retention viral hook suggestions in conversational Hinglish with emojis tailored specifically to what happens in this scene (e.g. curiosity, reaction, unexpected twist, suspense). Keep each under 40 characters.
+4. "hook" must be the single best primary hook from the 5 suggestions.
+5. Timestamps MUST be in format "HH:MM:SS" or "MM:SS" (e.g. "00:01:23").
+6. Return ONLY a JSON array of objects with the exact schema:
 [
   {
     "title": "Hinglish title without the word Short (under 50 chars)",
-    "hook": "Hinglish hook",
+    "hook": "Primary Hinglish hook (under 40 chars)",
+    "suggestedHooks": [
+      "Hook option 1...",
+      "Hook option 2...",
+      "Hook option 3...",
+      "Hook option 4...",
+      "Hook option 5..."
+    ],
     "start": "00:01:23",
     "end": "00:01:55"
   }
@@ -636,30 +654,41 @@ STRICT REQUIREMENTS:
         title: cleanSafeTitle
       });
 
-      // Build dynamic filter: 9:16 blurred frame + optional hook & channel handle text
-      const tempTextFiles = [];
-      const textFilters = buildDrawTextFilters(moment.hook, channelHandle, tempTextFiles);
-      let filterGraph = `split[a][b];[a]scale=180:320:force_original_aspect_ratio=increase,crop=180:320,boxblur=5:2,scale=1080:1920[bg];[b]scale=1080:-1[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2`;
-      if (textFilters) {
-        filterGraph += `[v];[v]${textFilters}`;
-      }
+      // Clean 9:16 vertical render without burned text
+      // Text & watermark are customized with live preview and burned at review step
+      const filterGraph = `split[a][b];[a]scale=180:320:force_original_aspect_ratio=increase,crop=180:320,boxblur=5:2,scale=1080:1920[bg];[b]scale=1080:-1[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2`;
 
       const ffmpegCmd = `ffmpeg -ss ${moment.start} -to ${moment.end} -i "${videoPath}" -vf "${filterGraph}" -preset ultrafast -c:v libx264 -crf 23 -c:a aac -threads 0 -y "${outputShortPath}"`;
 
       await new Promise((resolve) => {
         exec(ffmpegCmd, (err) => {
-          // Cleanup temp text files
-          for (const f of tempTextFiles) {
-            try { if (fs.existsSync(f)) fs.unlinkSync(f); } catch (e) {}
-          }
           if (err) {
             console.error(`Error rendering clip ${i + 1}:`, err);
             return resolve();
           }
+
+          // Save clip metadata alongside video for suggestions
+          const suggestedHooksList = (Array.isArray(moment.suggestedHooks) && moment.suggestedHooks.length > 0)
+            ? moment.suggestedHooks.slice(0, 5)
+            : (moment.hook ? [moment.hook] : []);
+
+          try {
+            fs.writeFileSync(`${outputShortPath}.json`, JSON.stringify({
+              title: cleanSafeTitle,
+              hook: moment.hook || '',
+              suggestedHooks: suggestedHooksList,
+              start: moment.start,
+              end: moment.end
+            }, null, 2), 'utf8');
+          } catch (e) {
+            console.warn('Failed to save metadata:', e.message);
+          }
+
           generatedFiles.push({
             name: shortFilename,
             title: cleanSafeTitle,
             hook: moment.hook,
+            suggestedHooks: suggestedHooksList,
             category: 'drafts',
             categoryLabel: 'Pre Ready Shorts',
             subfolder: '02_Shorts_Drafts',
@@ -689,6 +718,74 @@ STRICT REQUIREMENTS:
     if (uploadedFile && uploadedFile.file && uploadedFile.file.name) {
       try { await fileManager.deleteFile(uploadedFile.file.name); } catch (e) {}
     }
+  }
+});
+
+// API: Generate 5 best viral hooks for a Short using Gemini
+app.post('/api/suggest-hooks', async (req, res) => {
+  const { filename, title, apiKey } = req.body;
+  const key = apiKey || process.env.GEMINI_API_KEY;
+
+  const defaultHooks = [
+    "Wait for the end twist! 😱",
+    "Reaction dekh ke hasi nahi rukegi 😂",
+    "Bhai ne yeh kya bol diya?! 🤯",
+    "Dhyan se dekho end me kya hua 👀",
+    "Don't miss the climax! 🔥"
+  ];
+
+  if (!key) {
+    return res.json({ suggestedHooks: defaultHooks });
+  }
+
+  try {
+    const genAI = new GoogleGenerativeAI(key.trim());
+    const detectedModel = await resolveGeminiModel(key.trim());
+    const model = genAI.getGenerativeModel({ model: detectedModel || 'gemini-1.5-flash-latest' });
+
+    const cleanName = (title || filename || 'Viral Scene')
+      .replace(/^Short\s*[-–—:]\s*/i, '')
+      .replace(/\.mp4$/i, '')
+      .trim();
+
+    const prompt = `You are a viral YouTube Shorts / Reels expert for Indian audiences.
+Given this video scene title/topic: "${cleanName}", generate EXACTLY 5 best, punchy, high-retention viral hook text suggestions in conversational Hinglish (Hindi written in English alphabets with emojis).
+Make them diverse: one suspense/curiosity, one funny reaction, one unexpected twist, one relatable callout, one cliffhanger.
+Keep each hook under 40 characters.
+Return ONLY a valid JSON array of 5 strings, e.g.:
+[
+  "Wait for Papa's reaction... 😂",
+  "Ye kya bol diya bhai ne! 😱",
+  "Dhyan se dekho kya hua... 👀",
+  "Reaction dekh ke hasi nahi rukegi 🤣",
+  "Last tak dekho twist aayega 🔥"
+]`;
+
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+    const match = text.match(/\[\s*[\s\S]*\s*\]/);
+    if (match) {
+      const hooks = JSON.parse(match[0]);
+      if (Array.isArray(hooks) && hooks.length > 0) {
+        if (filename) {
+          const fileInfo = findVideoFile(filename);
+          if (fileInfo && fileInfo.foundPath) {
+            const metaPath = `${fileInfo.foundPath}.json`;
+            let meta = {};
+            if (fs.existsSync(metaPath)) {
+              try { meta = JSON.parse(fs.readFileSync(metaPath, 'utf8')); } catch (e) {}
+            }
+            meta.suggestedHooks = hooks.slice(0, 5);
+            try { fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2), 'utf8'); } catch (e) {}
+          }
+        }
+        return res.json({ suggestedHooks: hooks.slice(0, 5) });
+      }
+    }
+    res.json({ suggestedHooks: defaultHooks });
+  } catch (err) {
+    console.warn('suggest-hooks error:', err.message);
+    res.json({ suggestedHooks: defaultHooks });
   }
 });
 

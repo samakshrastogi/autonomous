@@ -1656,9 +1656,9 @@ body {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 9999px;
-  padding: 0.2rem 0.6rem;
+  padding: 0.25rem 0.65rem;
   font-size: 0.72rem;
-  color: #94a3b8;
+  color: #cbd5e1;
   cursor: pointer;
   transition: all 0.15s ease;
   white-space: nowrap;
@@ -1668,6 +1668,34 @@ body {
   background: rgba(234, 179, 8, 0.15);
   color: #facc15;
   border-color: rgba(234, 179, 8, 0.35);
+}
+
+.review-chip-btn.active-chip {
+  background: rgba(234, 179, 8, 0.22);
+  color: #fde047;
+  border-color: #facc15;
+  font-weight: 700;
+  box-shadow: 0 0 10px rgba(250, 204, 21, 0.3);
+}
+
+.review-refresh-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+  color: #94a3b8;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  transition: all 0.15s ease;
+}
+
+.review-refresh-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  color: #f8fafc;
 }
 
 .review-processing-card {
