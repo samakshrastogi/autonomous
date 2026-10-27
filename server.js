@@ -305,9 +305,38 @@ async function resolveGeminiModel(key) {
   return 'gemini-1.5-flash-latest';
 }
 
+// Helper: Build FFmpeg drawtext filter graph using UTF-8 text files
+function buildDrawTextFilters(topText, bottomText, tempFilesTracker) {
+  const filters = [];
+  const fontPath = '/Windows/Fonts/arialbd.ttf';
+
+  if (topText && typeof topText === 'string' && topText.trim()) {
+    const safeTop = topText.trim();
+    const topFile = path.join(DEFAULT_DOWNLOAD_DIR, `temp_txt_top_${Date.now()}_${Math.random().toString(36).substring(7)}.txt`);
+    fs.writeFileSync(topFile, safeTop, 'utf8');
+    tempFilesTracker.push(topFile);
+    const normalizedPath = topFile.replace(/\\/g, '/').replace(/^([A-Za-z]):/, '');
+    filters.push(`drawtext=fontfile='${fontPath}':textfile='${normalizedPath}':expansion=none:fontsize=48:line_spacing=12:fontcolor=yellow:box=1:boxcolor=black@0.65:boxborderw=18:x=(w-text_w)/2:y=280`);
+  }
+
+  if (bottomText && typeof bottomText === 'string' && bottomText.trim()) {
+    let cleanHandle = bottomText.trim();
+    if (!cleanHandle.startsWith('@') && !cleanHandle.startsWith('▶')) {
+      cleanHandle = `@${cleanHandle}`;
+    }
+    const botFile = path.join(DEFAULT_DOWNLOAD_DIR, `temp_txt_bot_${Date.now()}_${Math.random().toString(36).substring(7)}.txt`);
+    fs.writeFileSync(botFile, cleanHandle, 'utf8');
+    tempFilesTracker.push(botFile);
+    const normalizedPath = botFile.replace(/\\/g, '/').replace(/^([A-Za-z]):/, '');
+    filters.push(`drawtext=fontfile='${fontPath}':textfile='${normalizedPath}':expansion=none:fontsize=38:fontcolor=white:box=1:boxcolor=black@0.55:boxborderw=14:x=(w-text_w)/2:y=1460`);
+  }
+
+  return filters.join(',');
+}
+
 // API: Generate Shorts using Gemini Flash & FFmpeg
 app.post('/api/generate-shorts', async (req, res) => {
-  const { filename, apiKey } = req.body;
+  const { filename, apiKey, channelHandle } = req.body;
   const key = apiKey || process.env.GEMINI_API_KEY;
 
   if (!key || typeof key !== 'string' || !key.trim()) {
@@ -464,11 +493,22 @@ STRICT REQUIREMENTS:
         title: moment.title
       });
 
-      // FFmpeg command to cut and create vertical 9:16 Short with high-performance blurred background
-      const ffmpegCmd = `ffmpeg -ss ${moment.start} -to ${moment.end} -i "${videoPath}" -vf "split[a][b];[a]scale=180:320:force_original_aspect_ratio=increase,crop=180:320,boxblur=5:2,scale=1080:1920[bg];[b]scale=1080:-1[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2" -preset ultrafast -c:v libx264 -crf 23 -c:a aac -threads 0 -y "${outputShortPath}"`;
+      // Build dynamic filter: 9:16 blurred frame + optional hook & channel handle text
+      const tempTextFiles = [];
+      const textFilters = buildDrawTextFilters(moment.hook, channelHandle, tempTextFiles);
+      let filterGraph = `split[a][b];[a]scale=180:320:force_original_aspect_ratio=increase,crop=180:320,boxblur=5:2,scale=1080:1920[bg];[b]scale=1080:-1[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2`;
+      if (textFilters) {
+        filterGraph += `[v];[v]${textFilters}`;
+      }
+
+      const ffmpegCmd = `ffmpeg -ss ${moment.start} -to ${moment.end} -i "${videoPath}" -vf "${filterGraph}" -preset ultrafast -c:v libx264 -crf 23 -c:a aac -threads 0 -y "${outputShortPath}"`;
 
       await new Promise((resolve) => {
         exec(ffmpegCmd, (err) => {
+          // Cleanup temp text files
+          for (const f of tempTextFiles) {
+            try { if (fs.existsSync(f)) fs.unlinkSync(f); } catch (e) {}
+          }
           if (err) {
             console.error(`Error rendering short ${i + 1}:`, err);
             return resolve();
@@ -503,6 +543,78 @@ STRICT REQUIREMENTS:
     if (uploadedFile && uploadedFile.file && uploadedFile.file.name) {
       try { await fileManager.deleteFile(uploadedFile.file.name); } catch (e) {}
     }
+  }
+});
+
+// API: Burn custom top hook text & channel handle to an existing Short
+app.post('/api/burn-text', async (req, res) => {
+  const { filename, topText, channelHandle } = req.body;
+  if (!filename) {
+    return res.status(400).json({ error: 'Filename is required' });
+  }
+
+  const videoPath = path.join(DEFAULT_DOWNLOAD_DIR, filename);
+  if (!fs.existsSync(videoPath)) {
+    return res.status(404).json({ error: 'Video file not found on disk' });
+  }
+
+  const tempFilesTracker = [];
+  const tempOutputPath = path.join(DEFAULT_DOWNLOAD_DIR, `temp_burn_${Date.now()}.mp4`);
+
+  try {
+    const drawFilters = buildDrawTextFilters(topText, channelHandle, tempFilesTracker);
+    if (!drawFilters) {
+      return res.status(400).json({ error: 'Please enter top hook text or a channel handle to apply.' });
+    }
+
+    const ffmpegCmd = `ffmpeg -i "${videoPath}" -vf "${drawFilters}" -preset ultrafast -c:v libx264 -crf 23 -c:a copy -threads 0 -y "${tempOutputPath}"`;
+
+    await new Promise((resolve, reject) => {
+      exec(ffmpegCmd, (err, stdout, stderr) => {
+        if (err) return reject(new Error(stderr || err.message));
+        resolve();
+      });
+    });
+
+    // Replace original file with the text-burned file safely
+    try {
+      if (fs.existsSync(videoPath)) {
+        fs.unlinkSync(videoPath);
+      }
+      fs.renameSync(tempOutputPath, videoPath);
+    } catch (replaceErr) {
+      try {
+        fs.copyFileSync(tempOutputPath, videoPath);
+        fs.unlinkSync(tempOutputPath);
+      } catch (copyErr) {
+        const ext = path.extname(filename);
+        const base = path.basename(filename, ext);
+        const brandedName = `${base} (branded)${ext}`;
+        const brandedPath = path.join(DEFAULT_DOWNLOAD_DIR, brandedName);
+        fs.renameSync(tempOutputPath, brandedPath);
+        return res.json({
+          success: true,
+          message: 'Branded Short saved successfully!',
+          filename: brandedName,
+          url: `/api/video/${encodeURIComponent(brandedName)}?t=${Date.now()}`
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Short text and branding applied successfully!',
+      filename: filename,
+      url: `/api/video/${encodeURIComponent(filename)}?t=${Date.now()}`
+    });
+  } catch (err) {
+    console.error('Error burning text to short:', err);
+    res.status(500).json({ error: err.message || 'Failed to burn text to video' });
+  } finally {
+    for (const f of tempFilesTracker) {
+      try { if (fs.existsSync(f)) fs.unlinkSync(f); } catch (e) {}
+    }
+    try { if (fs.existsSync(tempOutputPath)) fs.unlinkSync(tempOutputPath); } catch (e) {}
   }
 });
 

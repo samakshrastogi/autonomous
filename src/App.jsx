@@ -5,6 +5,8 @@ import DownloadProgress from './components/DownloadProgress.jsx';
 import VideoGallery from './components/VideoGallery.jsx';
 import ApiKeyModal from './components/ApiKeyModal.jsx';
 import ShortsGeneratorModal from './components/ShortsGeneratorModal.jsx';
+import ChannelHandleModal from './components/ChannelHandleModal.jsx';
+import ShortsReviewModal from './components/ShortsReviewModal.jsx';
 
 export default function App() {
   const [url, setUrl] = useState('');
@@ -20,6 +22,16 @@ export default function App() {
   // Gemini API Key state
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
+
+  // Channel Username Branding state
+  const [channelHandle, setChannelHandle] = useState(() => localStorage.getItem('shorts_channel_handle') || '');
+  const [isChannelModalOpen, setIsChannelModalOpen] = useState(false);
+
+  // Shorts Review & Text Burn modal state
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [selectedShortForReview, setSelectedShortForReview] = useState(null);
+  const [reviewInitialHook, setReviewInitialHook] = useState('');
+  const [isBurningText, setIsBurningText] = useState(false);
 
   // Shorts Generation modal state
   const [isShortsModalOpen, setIsShortsModalOpen] = useState(false);
@@ -39,6 +51,51 @@ export default function App() {
   const handleSaveApiKey = (key) => {
     setApiKey(key);
     localStorage.setItem('gemini_api_key', key);
+  };
+
+  const handleSaveChannelHandle = (handle) => {
+    setChannelHandle(handle);
+    localStorage.setItem('shorts_channel_handle', handle);
+  };
+
+  const handleOpenReviewModal = (file, hook = '') => {
+    setSelectedShortForReview(file);
+    setReviewInitialHook(hook || '');
+    setIsReviewModalOpen(true);
+  };
+
+  const handleReviewFromGenerator = (short) => {
+    setIsShortsModalOpen(false);
+    handleOpenReviewModal(short, short.hook);
+  };
+
+  const handleBurnText = async ({ filename, topText, channelHandle: customHandle }) => {
+    setIsBurningText(true);
+    try {
+      const res = await fetch('/api/burn-text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename,
+          topText,
+          channelHandle: customHandle
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to burn text to Short');
+      }
+
+      if (customHandle) {
+        handleSaveChannelHandle(customHandle);
+      }
+
+      await fetchRecentFiles();
+      setIsReviewModalOpen(false);
+    } finally {
+      setIsBurningText(false);
+    }
   };
 
   const fetchRecentFiles = async () => {
@@ -207,7 +264,8 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           filename: file.name,
-          apiKey: apiKey
+          apiKey: apiKey,
+          channelHandle: channelHandle
         })
       });
 
@@ -282,6 +340,8 @@ export default function App() {
       <Header
         apiKey={apiKey}
         onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
+        channelHandle={channelHandle}
+        onOpenChannelModal={() => setIsChannelModalOpen(true)}
       />
 
       <DownloadForm
@@ -308,6 +368,7 @@ export default function App() {
         onRefresh={fetchRecentFiles}
         formatFileSize={formatFileSize}
         onGenerateShorts={handleGenerateShorts}
+        onReviewShort={handleOpenReviewModal}
       />
 
       {/* Gemini API Key Modal */}
@@ -316,6 +377,14 @@ export default function App() {
         onClose={() => setIsApiKeyModalOpen(false)}
         apiKey={apiKey}
         onSaveApiKey={handleSaveApiKey}
+      />
+
+      {/* Channel Handle Watermark Modal */}
+      <ChannelHandleModal
+        isOpen={isChannelModalOpen}
+        onClose={() => setIsChannelModalOpen(false)}
+        channelHandle={channelHandle}
+        onSaveHandle={handleSaveChannelHandle}
       />
 
       {/* Shorts Generation Live Modal */}
@@ -328,6 +397,18 @@ export default function App() {
         generatedShorts={generatedShorts}
         isProcessing={isProcessingShorts}
         error={shortsError}
+        onReviewGeneratedShort={handleReviewFromGenerator}
+      />
+
+      {/* Shorts Review & Text Burn Modal */}
+      <ShortsReviewModal
+        isOpen={isReviewModalOpen}
+        onClose={() => setIsReviewModalOpen(false)}
+        shortFile={selectedShortForReview}
+        initialHook={reviewInitialHook}
+        channelHandle={channelHandle}
+        onBurnText={handleBurnText}
+        isProcessing={isBurningText}
       />
     </div>
   );

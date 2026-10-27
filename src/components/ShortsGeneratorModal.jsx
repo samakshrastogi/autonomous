@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Sparkles, X, CheckCircle2, AlertCircle, Film } from 'lucide-react';
+import { Sparkles, X, CheckCircle2, AlertCircle, Film, Type } from 'lucide-react';
 
 export default function ShortsGeneratorModal({
   isOpen,
@@ -9,7 +9,8 @@ export default function ShortsGeneratorModal({
   discoveredMoments,
   generatedShorts,
   isProcessing,
-  error
+  error,
+  onReviewGeneratedShort
 }) {
   // Close on 'Escape' key when not processing
   useEffect(() => {
@@ -115,14 +116,57 @@ export default function ShortsGeneratorModal({
 
         {/* Completion Success State */}
         {!isProcessing && generatedShorts && generatedShorts.length > 0 && (
-          <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '0.85rem', borderRadius: '0.6rem', marginBottom: '1.25rem', textAlign: 'center' }}>
-            <CheckCircle2 size={22} color="#16a34a" style={{ margin: '0 auto 0.35rem' }} />
-            <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#166534' }}>
-              {generatedShorts.length} Shorts Created in 9:16 Frame!
-            </h4>
-            <p style={{ fontSize: '0.8rem', color: '#15803d', marginTop: '0.2rem' }}>
-              All clips are ready in your library and saved in your videos folder.
-            </p>
+          <div style={{ marginBottom: '1.25rem' }}>
+            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '0.85rem', borderRadius: '0.6rem', marginBottom: '0.85rem', textAlign: 'center' }}>
+              <CheckCircle2 size={22} color="#16a34a" style={{ margin: '0 auto 0.35rem' }} />
+              <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#166534' }}>
+                {generatedShorts.length} Shorts Created in 9:16 Frame!
+              </h4>
+              <p style={{ fontSize: '0.8rem', color: '#15803d', marginTop: '0.2rem' }}>
+                All clips are ready. You can review and customize text on any clip below:
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '180px', overflowY: 'auto' }}>
+              {generatedShorts.map((short, idx) => (
+                <div key={idx} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '0.5rem', padding: '0.6rem 0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
+                  <div style={{ overflow: 'hidden' }}>
+                    <div style={{ fontSize: '0.825rem', fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {short.title || short.name}
+                    </div>
+                    {short.hook && (
+                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                        💡 Hook: "{short.hook}"
+                      </div>
+                    )}
+                  </div>
+                  {onReviewGeneratedShort && (
+                    <button
+                      type="button"
+                      onClick={() => onReviewGeneratedShort(short)}
+                      className="action-btn-secondary"
+                      style={{
+                        padding: '0.3rem 0.65rem',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                        flexShrink: 0,
+                        background: '#ffffff',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '0.4rem',
+                        cursor: 'pointer'
+                      }}
+                      title="Review Short and customize top hook text"
+                    >
+                      <Type size={12} color="#ef4444" />
+                      <span>Review / Text</span>
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

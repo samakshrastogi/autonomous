@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Sparkles, CheckCircle2 } from 'lucide-react';
+import { Sparkles, CheckCircle2, Type } from 'lucide-react';
 
-export default function VideoCard({ file, formatFileSize, onGenerateShorts }) {
+export default function VideoCard({ file, formatFileSize, onGenerateShorts, onReviewShort }) {
   const [durationStr, setDurationStr] = useState('');
   const isShort = /#shorts|\bshorts\b/i.test(file.name);
 
@@ -84,7 +84,30 @@ export default function VideoCard({ file, formatFileSize, onGenerateShorts }) {
           </div>
 
           <div className="video-actions">
-            {!isShort && onGenerateShorts ? (
+            {isShort && onReviewShort ? (
+              <button
+                type="button"
+                onClick={() => onReviewShort(file)}
+                className="action-btn-secondary"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  padding: '0.28rem 0.6rem',
+                  borderRadius: '0.45rem',
+                  background: '#f8fafc',
+                  color: '#334155',
+                  border: '1px solid #cbd5e1',
+                  cursor: 'pointer'
+                }}
+                title="Review this Short and customize top text & channel username"
+              >
+                <Type size={12} color="#ef4444" />
+                <span>Add / Edit Text</span>
+              </button>
+            ) : !isShort && onGenerateShorts ? (
               <button
                 type="button"
                 onClick={() => onGenerateShorts(file)}

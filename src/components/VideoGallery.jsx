@@ -7,7 +7,8 @@ export default function VideoGallery({
   loading,
   onRefresh,
   formatFileSize,
-  onGenerateShorts
+  onGenerateShorts,
+  onReviewShort
 }) {
   return (
     <div>
@@ -59,6 +60,7 @@ export default function VideoGallery({
               file={file}
               formatFileSize={formatFileSize}
               onGenerateShorts={onGenerateShorts}
+              onReviewShort={onReviewShort}
             />
           ))}
         </div>
