@@ -159,9 +159,16 @@ export default function ShortsGeneratorSidebar({
                   <span style={{ fontWeight: 600, color: '#f8fafc', fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {m.title}
                   </span>
-                  <span style={{ color: '#ef4444', fontFamily: 'monospace', fontSize: '0.68rem', flexShrink: 0 }}>
-                    {m.start} - {m.end}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
+                    {m.duration && (
+                      <span style={{ color: '#34d399', fontSize: '0.66rem', fontWeight: 700, background: 'rgba(52, 211, 153, 0.12)', padding: '0.1rem 0.3rem', borderRadius: '4px' }}>
+                        {m.duration}s
+                      </span>
+                    )}
+                    <span style={{ color: '#ef4444', fontFamily: 'monospace', fontSize: '0.68rem' }}>
+                      {m.start} - {m.end}
+                    </span>
+                  </div>
                 </div>
               </div>
             ))}

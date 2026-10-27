@@ -450,8 +450,31 @@ async function resolveGeminiModel(key) {
   return 'gemini-1.5-flash-latest';
 }
 
+// Helper: Parse timestamp (HH:MM:SS or MM:SS or S) to total seconds
+function parseTimestampToSeconds(ts) {
+  if (!ts) return 0;
+  const parts = ts.toString().trim().split(':').map(Number);
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  if (parts.length === 1) return parts[0] || 0;
+  return 0;
+}
+
+// Helper: Format total seconds to HH:MM:SS or MM:SS
+function formatSecondsToTimestamp(totalSec) {
+  const s = Math.max(0, Math.floor(totalSec));
+  const hours = Math.floor(s / 3600);
+  const minutes = Math.floor((s % 3600) / 60);
+  const seconds = s % 60;
+  const pad = (n) => String(n).padStart(2, '0');
+  return hours > 0
+    ? `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`
+    : `00:${pad(minutes)}:${pad(seconds)}`;
+}
+
 // Helper: Build FFmpeg drawtext filter graph using UTF-8 text files
-function buildDrawTextFilters(topText, bottomText, tempFilesTracker) {
+// hookDuration: Number of seconds the retention hook is active at the start (default 5s)
+function buildDrawTextFilters(topText, bottomText, tempFilesTracker, hookDuration = 5) {
   const filters = [];
   const fontPath = '/Windows/Fonts/arialbd.ttf';
 
@@ -461,7 +484,8 @@ function buildDrawTextFilters(topText, bottomText, tempFilesTracker) {
     fs.writeFileSync(topFile, safeTop, 'utf8');
     tempFilesTracker.push(topFile);
     const normalizedPath = topFile.replace(/\\/g, '/').replace(/^([A-Za-z]):/, '');
-    filters.push(`drawtext=fontfile='${fontPath}':textfile='${normalizedPath}':expansion=none:fontsize=48:line_spacing=12:fontcolor=yellow:box=1:boxcolor=black@0.65:boxborderw=18:x=(w-text_w)/2:y=280`);
+    const durationFilter = (hookDuration && hookDuration > 0) ? `:enable='between(t,0,${hookDuration})'` : '';
+    filters.push(`drawtext=fontfile='${fontPath}':textfile='${normalizedPath}':expansion=none:fontsize=46:line_spacing=12:fontcolor=yellow:box=1:boxcolor=black@0.70:boxborderw=18:x=(w-text_w)/2:y=280${durationFilter}`);
   }
 
   if (bottomText && typeof bottomText === 'string' && bottomText.trim()) {
@@ -546,20 +570,24 @@ app.post('/api/generate-shorts', async (req, res) => {
     const detectedModel = await resolveGeminiModel(key.trim());
 
     const prompt = `Analyze this video audio carefully.
-Find ALL genuinely viral, funny, punchy, dramatic, or climax moments suitable for vertical video clips (duration between 15 to 58 seconds each).
-DO NOT limit to a fixed number: detect as many moments as genuinely exist in the video that have strong viral potential. If there are 2, return 2; if there are 5, return 5; if there are 8, return 8. Only return genuine, high-retention moments without filler.
+Find ALL genuinely viral, funny, punchy, dramatic, or climax moments suitable for vertical video clips.
+DO NOT limit to a fixed number: detect as many moments as genuinely exist in the video that have strong viral potential. If there are 2, return 2; if there are 4, return 4; if there are 6, return 6.
 
-STRICT REQUIREMENTS:
-1. Every title MUST be in conversational Hinglish (Hindi written in English alphabets, e.g. "Jethalal ki phir phasi kismat", "Bhai ne yeh kya bol diya", "Reaction dekh ke hasi nahi rukegi").
-2. DO NOT include the word "Short" or "Shorts" in any title.
-3. For each moment, provide "suggestedHooks": an array of EXACTLY 5 best, distinct, high-retention viral hook suggestions in conversational Hinglish with emojis tailored specifically to what happens in this scene (e.g. curiosity, reaction, unexpected twist, suspense). Keep each under 40 characters.
-4. "hook" must be the single best primary hook from the 5 suggestions.
-5. Timestamps MUST be in format "HH:MM:SS" or "MM:SS" (e.g. "00:01:23").
-6. Return ONLY a JSON array of objects with the exact schema:
+CRITICAL REQUIREMENTS FOR GENUINE & MEANINGFUL SHORTS:
+1. MEANING & STORY ARC: Every clip MUST have clear meaning and a self-contained story arc (Setup -> Escalation -> Climax/Punchline/Payoff). When a viewer watches it, they must immediately understand the scene and find it genuine, hilarious, shocking, dramatic, or relatable. NEVER select arbitrary pauses, background music loops, or random fragments without a point.
+2. NO ABRUPT CUTS: Do NOT start or end mid-sentence or mid-word. The start timestamp must begin right before the dialogue/action starts, and the end timestamp must conclude right after the punchline, laughter, or reaction has completed.
+3. DURATION LIMIT (< 40 SECONDS): Every clip MUST BE strictly LESS THAN 40 SECONDS (ideal range: 18 to 35 seconds, ABSOLUTE MAXIMUM 38 SECONDS). NEVER return a clip that is 40 seconds or longer. Discard any scene that cannot conclude within 38 seconds.
+4. RETENTION HOOK (FIRST 5 SECONDS): For each moment, craft a killer viral retention hook in conversational Hinglish with emojis tailored specifically to what happens in the scene. This hook will be displayed on screen during the FIRST 5 SECONDS of the short to excite viewers and hook their attention so they watch the whole video.
+5. Provide "suggestedHooks": an array of EXACTLY 5 best, distinct, high-retention viral hook suggestions in conversational Hinglish with emojis (curiosity, shock, funny reaction, twist). Keep each under 40 characters.
+6. "hook" must be the single best primary retention hook chosen from the 5 suggestions.
+7. Every "title" MUST be in conversational Hinglish (Hindi in English letters, under 50 characters). DO NOT include the word "Short" or "Shorts" in any title.
+8. Timestamps MUST be in format "HH:MM:SS" or "MM:SS" (e.g. "00:01:23").
+
+Return ONLY a valid JSON array of objects with the exact schema:
 [
   {
     "title": "Hinglish title without the word Short (under 50 chars)",
-    "hook": "Primary Hinglish hook (under 40 chars)",
+    "hook": "Primary viral retention hook for first 5 seconds (under 40 chars)",
     "suggestedHooks": [
       "Hook option 1...",
       "Hook option 2...",
@@ -617,23 +645,52 @@ STRICT REQUIREMENTS:
     }
 
     // Parse JSON cleanly, handling markdown code fences if present
-    let moments = [];
+    let rawMoments = [];
     try {
       const jsonMatch = responseText.match(/\[\s*\{[\s\S]*\}\s*\]/);
       const jsonString = jsonMatch ? jsonMatch[0] : responseText;
-      moments = JSON.parse(jsonString);
+      rawMoments = JSON.parse(jsonString);
     } catch (e) {
       console.error('Failed to parse Gemini JSON:', responseText);
       throw new Error('Gemini returned an invalid response format.');
     }
 
-    if (!Array.isArray(moments) || moments.length === 0) {
+    if (!Array.isArray(rawMoments) || rawMoments.length === 0) {
       throw new Error('No suitable moments found for Shorts in this video.');
+    }
+
+    // Rigorous filtering & duration clamping (< 40 seconds guaranteed)
+    const moments = [];
+    for (const moment of rawMoments) {
+      if (!moment.start || !moment.end) continue;
+      const startSec = parseTimestampToSeconds(moment.start);
+      let endSec = parseTimestampToSeconds(moment.end);
+      let duration = endSec - startSec;
+
+      // Hard clamp: Every short MUST strictly be less than 40s
+      if (duration >= 40) {
+        endSec = startSec + 38; // Enforce maximum 38s
+        duration = 38;
+        moment.end = formatSecondsToTimestamp(endSec);
+      }
+
+      // Filter out moments that are too short to have real meaning (< 10 seconds)
+      if (duration < 10) {
+        console.log(`[Moments] Skipping moment "${moment.title}" due to short duration (${duration}s)`);
+        continue;
+      }
+
+      moment.duration = duration;
+      moments.push(moment);
+    }
+
+    if (moments.length === 0) {
+      throw new Error('No genuine moments meeting quality and duration (< 40s) requirements were found.');
     }
 
     sendEvent('moments', { moments });
 
-    // 4. Render 9:16 Shorts with FFmpeg (fast)
+    // 4. Render 9:16 Shorts with FFmpeg (fast) + 5-second Retention Hook
     const generatedFiles = [];
     for (let i = 0; i < moments.length; i++) {
       const moment = moments[i];
@@ -648,37 +705,50 @@ STRICT REQUIREMENTS:
 
       sendEvent('status', {
         phase: 'rendering',
-        message: `Rendering clip ${i + 1}/${moments.length}: "${cleanSafeTitle}" (9:16)...`,
+        message: `Rendering clip ${i + 1}/${moments.length}: "${cleanSafeTitle}" (9:16, 5s hook, ${moment.duration}s)...`,
         current: i + 1,
         total: moments.length,
         title: cleanSafeTitle
       });
 
-      // Clean 9:16 vertical render without burned text
-      // Text & watermark are customized with live preview and burned at review step
-      const filterGraph = `split[a][b];[a]scale=180:320:force_original_aspect_ratio=increase,crop=180:320,boxblur=5:2,scale=1080:1920[bg];[b]scale=1080:-1[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2`;
+      // Build 5-second retention hook filter + optional channel watermark
+      const tempRenderFiles = [];
+      const primaryHook = moment.hook || (Array.isArray(moment.suggestedHooks) && moment.suggestedHooks[0]) || '';
+      const drawFilters = buildDrawTextFilters(primaryHook, channelHandle, tempRenderFiles, 5);
+
+      let filterGraph = `split[a][b];[a]scale=180:320:force_original_aspect_ratio=increase,crop=180:320,boxblur=5:2,scale=1080:1920[bg];[b]scale=1080:-1[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2`;
+      if (drawFilters) {
+        filterGraph += `,${drawFilters}`;
+      }
 
       const ffmpegCmd = `ffmpeg -ss ${moment.start} -to ${moment.end} -i "${videoPath}" -vf "${filterGraph}" -preset ultrafast -c:v libx264 -crf 23 -c:a aac -threads 0 -y "${outputShortPath}"`;
 
       await new Promise((resolve) => {
         exec(ffmpegCmd, (err) => {
+          // Cleanup render text temp files
+          for (const f of tempRenderFiles) {
+            try { if (fs.existsSync(f)) fs.unlinkSync(f); } catch (e) {}
+          }
+
           if (err) {
             console.error(`Error rendering clip ${i + 1}:`, err);
             return resolve();
           }
 
-          // Save clip metadata alongside video for suggestions
+          // Save clip metadata alongside video for suggestions & future re-burn
           const suggestedHooksList = (Array.isArray(moment.suggestedHooks) && moment.suggestedHooks.length > 0)
             ? moment.suggestedHooks.slice(0, 5)
-            : (moment.hook ? [moment.hook] : []);
+            : (primaryHook ? [primaryHook] : []);
 
           try {
             fs.writeFileSync(`${outputShortPath}.json`, JSON.stringify({
               title: cleanSafeTitle,
-              hook: moment.hook || '',
+              hook: primaryHook,
               suggestedHooks: suggestedHooksList,
               start: moment.start,
-              end: moment.end
+              end: moment.end,
+              duration: moment.duration,
+              sourceVideo: path.basename(videoPath)
             }, null, 2), 'utf8');
           } catch (e) {
             console.warn('Failed to save metadata:', e.message);
@@ -687,8 +757,9 @@ STRICT REQUIREMENTS:
           generatedFiles.push({
             name: shortFilename,
             title: cleanSafeTitle,
-            hook: moment.hook,
+            hook: primaryHook,
             suggestedHooks: suggestedHooksList,
+            duration: moment.duration,
             category: 'drafts',
             categoryLabel: 'Pre Ready Shorts',
             subfolder: '02_Shorts_Drafts',
@@ -701,7 +772,7 @@ STRICT REQUIREMENTS:
 
     sendEvent('complete', {
       success: true,
-      message: `Successfully generated ${generatedFiles.length} Shorts! Saved in 02_Shorts_Drafts.`,
+      message: `Successfully generated ${generatedFiles.length} Shorts (< 40s with 5s retention hook)! Saved in 02_Shorts_Drafts.`,
       shorts: generatedFiles
     });
     res.end();
@@ -807,12 +878,32 @@ app.post('/api/burn-text', async (req, res) => {
   const finalReadyPath = path.join(FOLDERS.SHORTS_READY, filename);
 
   try {
-    const drawFilters = buildDrawTextFilters(topText, channelHandle, tempFilesTracker);
+    const drawFilters = buildDrawTextFilters(topText, channelHandle, tempFilesTracker, 5);
     if (!drawFilters) {
       return res.status(400).json({ error: 'Please enter top hook text or a channel handle to apply.' });
     }
 
-    const ffmpegCmd = `ffmpeg -i "${videoPath}" -vf "${drawFilters}" -preset ultrafast -c:v libx264 -crf 23 -c:a copy -threads 0 -y "${tempOutputPath}"`;
+    // Check if metadata exists with sourceVideo, start, end
+    const metaPath = `${videoPath}.json`;
+    let meta = {};
+    if (fs.existsSync(metaPath)) {
+      try { meta = JSON.parse(fs.readFileSync(metaPath, 'utf8')); } catch (e) {}
+    }
+
+    let ffmpegCmd = '';
+    const sourceFound = meta.sourceVideo ? findVideoFile(meta.sourceVideo) : null;
+
+    if (sourceFound && sourceFound.foundPath && fs.existsSync(sourceFound.foundPath) && meta.start && meta.end) {
+      // Clean re-render from pristine source video with 5s retention hook
+      let filterGraph = `split[a][b];[a]scale=180:320:force_original_aspect_ratio=increase,crop=180:320,boxblur=5:2,scale=1080:1920[bg];[b]scale=1080:-1[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2`;
+      if (drawFilters) {
+        filterGraph += `,${drawFilters}`;
+      }
+      ffmpegCmd = `ffmpeg -ss ${meta.start} -to ${meta.end} -i "${sourceFound.foundPath}" -vf "${filterGraph}" -preset ultrafast -c:v libx264 -crf 23 -c:a aac -threads 0 -y "${tempOutputPath}"`;
+    } else {
+      // Apply 5s retention hook directly onto current video
+      ffmpegCmd = `ffmpeg -i "${videoPath}" -vf "${drawFilters}" -preset ultrafast -c:v libx264 -crf 23 -c:a copy -threads 0 -y "${tempOutputPath}"`;
+    }
 
     await new Promise((resolve, reject) => {
       exec(ffmpegCmd, (err, stdout, stderr) => {
@@ -843,6 +934,12 @@ app.post('/api/burn-text', async (req, res) => {
         const brandedName = `${base} (branded)${ext}`;
         const brandedPath = path.join(FOLDERS.SHORTS_READY, brandedName);
         fs.renameSync(tempOutputPath, brandedPath);
+
+        meta.hook = topText;
+        if (channelHandle) meta.channelHandle = channelHandle;
+        try { fs.writeFileSync(`${brandedPath}.json`, JSON.stringify(meta, null, 2), 'utf8'); } catch (e) {}
+        if (fs.existsSync(metaPath)) { try { fs.unlinkSync(metaPath); } catch (e) {} }
+
         return res.json({
           success: true,
           message: 'Branded Short saved to 03_Shorts_Ready!',
@@ -852,6 +949,15 @@ app.post('/api/burn-text', async (req, res) => {
           url: `/api/video/03_Shorts_Ready/${encodeURIComponent(brandedName)}?t=${Date.now()}`
         });
       }
+    }
+
+    // Update metadata and save next to finalReadyPath
+    meta.hook = topText;
+    if (channelHandle) meta.channelHandle = channelHandle;
+    const readyMetaPath = `${finalReadyPath}.json`;
+    try { fs.writeFileSync(readyMetaPath, JSON.stringify(meta, null, 2), 'utf8'); } catch (e) {}
+    if (metaPath !== readyMetaPath && fs.existsSync(metaPath)) {
+      try { fs.unlinkSync(metaPath); } catch (e) {}
     }
 
     res.json({
