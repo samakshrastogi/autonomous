@@ -79,7 +79,7 @@ app.get('/api/files', (req, res) => {
   try {
     const entries = fs.readdirSync(targetDir, { withFileTypes: true });
     const files = entries
-      .filter((e) => e.isFile() && (e.name.endsWith('.mp4') || e.name.endsWith('.mkv') || e.name.endsWith('.webm')))
+      .filter((e) => e.isFile() && !e.name.startsWith('temp_') && (e.name.endsWith('.mp4') || e.name.endsWith('.mkv') || e.name.endsWith('.webm')))
       .map((e) => {
         const fullPath = path.join(targetDir, e.name);
         const stats = fs.statSync(fullPath);

@@ -48,6 +48,20 @@ export default function App() {
     fetchRecentFiles();
   }, []);
 
+  // Ensure only 1 video plays at a time across the entire application
+  useEffect(() => {
+    const handleVideoPlay = (e) => {
+      const allVideos = document.querySelectorAll('video');
+      allVideos.forEach((video) => {
+        if (video !== e.target && !video.paused) {
+          video.pause();
+        }
+      });
+    };
+    document.addEventListener('play', handleVideoPlay, true);
+    return () => document.removeEventListener('play', handleVideoPlay, true);
+  }, []);
+
   const handleSaveApiKey = (key) => {
     setApiKey(key);
     localStorage.setItem('gemini_api_key', key);

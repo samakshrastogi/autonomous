@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Sparkles, CheckCircle2, Type } from 'lucide-react';
 
 export default function VideoCard({ file, formatFileSize, onGenerateShorts, onReviewShort }) {
-  const [durationStr, setDurationStr] = useState('');
   const isShort = /#shorts|\bshorts\b/i.test(file.name);
 
   // Clean title: remove format codes (.f616), raw video IDs [yNd4wg47-PY], and extensions
@@ -17,29 +16,9 @@ export default function VideoCard({ file, formatFileSize, onGenerateShorts, onRe
       .trim();
   };
 
-  const formatDuration = (seconds) => {
-    if (!seconds || isNaN(seconds)) return '';
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    if (mins >= 60) {
-      const hrs = Math.floor(mins / 60);
-      const remMins = mins % 60;
-      return `${hrs}:${remMins < 10 ? '0' : ''}${remMins}:${secs < 10 ? '0' : ''}${secs}`;
-    }
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-  };
-
-  const handleMetadata = (e) => {
-    if (e.target && e.target.duration) {
-      setDurationStr(formatDuration(e.target.duration));
-    }
-  };
-
   const formattedDate = new Date(file.mtime).toLocaleDateString(undefined, {
     month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
+    day: 'numeric'
   });
 
   return (
@@ -53,7 +32,6 @@ export default function VideoCard({ file, formatFileSize, onGenerateShorts, onRe
           preload="metadata"
           playsInline
           src={file.url}
-          onLoadedMetadata={handleMetadata}
         >
           Your browser does not support the video tag.
         </video>
@@ -61,12 +39,6 @@ export default function VideoCard({ file, formatFileSize, onGenerateShorts, onRe
         {isShort && (
           <span className="shorts-tag">
             Shorts
-          </span>
-        )}
-
-        {durationStr && (
-          <span className="video-duration-pill">
-            {durationStr}
           </span>
         )}
       </div>
