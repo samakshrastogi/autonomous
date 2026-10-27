@@ -71,7 +71,7 @@ export default function DownloadProgress({
             <div className="stepper-circle">
               {isSuccess ? <Check size={12} /> : '3'}
             </div>
-            <span className="stepper-label">Saved to 01_Downloads</span>
+            <span className="stepper-label">Saved</span>
           </div>
         </div>
       )}

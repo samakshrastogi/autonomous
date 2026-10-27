@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Download, Sparkles, FolderDown, Layers, HardDrive } from 'lucide-react';
 import Header from './components/Header.jsx';
 import DownloadForm from './components/DownloadForm.jsx';
 import DownloadProgress from './components/DownloadProgress.jsx';
@@ -17,8 +18,10 @@ export default function App() {
   const [statusType, setStatusType] = useState('idle'); // idle | running | success | error
   const [videoTitle, setVideoTitle] = useState('');
   const [recentFiles, setRecentFiles] = useState([]);
+  const [folderSizes, setFolderSizes] = useState({ all: 0, downloads: 0, drafts: 0, ready: 0 });
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [activeTab, setActiveTab] = useState('all'); // 'all' | 'downloads' | 'drafts' | 'ready'
+  const [autoGenerateShorts, setAutoGenerateShorts] = useState(() => localStorage.getItem('auto_shorts_enabled') === 'true');
 
   // Gemini API Key state
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
@@ -131,6 +134,9 @@ export default function App() {
       if (data.files) {
         setRecentFiles(data.files);
       }
+      if (data.sizes) {
+        setFolderSizes(data.sizes);
+      }
     } catch (err) {
       console.error('Error fetching videos:', err);
     } finally {
@@ -240,8 +246,19 @@ export default function App() {
             }
             setUrl('');
             fetchRecentFiles();
-            // Automatically switch active tab in library to downloads!
             setActiveTab('downloads');
+
+            // Auto-trigger AI Shorts if toggle enabled
+            if (autoGenerateShorts && eventData.filename) {
+              const dlFile = {
+                name: eventData.filename,
+                category: 'downloads',
+                subfolder: '01_Downloads'
+              };
+              setTimeout(() => {
+                handleGenerateShorts(dlFile);
+              }, 600);
+            }
           } else if (eventType === 'error') {
             setStatusType('error');
             setStatusText(eventData.message || 'Download failed');
@@ -356,6 +373,36 @@ export default function App() {
     }
   };
 
+  const handleDeleteVideo = async (file) => {
+    if (!window.confirm(`Are you sure you want to delete "${file.name}"? This file will be removed from disk.`)) {
+      return;
+    }
+    try {
+      const res = await fetch('/api/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name, subfolder: file.subfolder })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete file');
+      await fetchRecentFiles();
+    } catch (err) {
+      alert(`Error deleting video: ${err.message}`);
+    }
+  };
+
+  const handleOpenFolder = async (category = 'all') => {
+    try {
+      await fetch('/api/open-folder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category })
+      });
+    } catch (err) {
+      console.error('Error opening folder:', err);
+    }
+  };
+
   const formatFileSize = (bytes) => {
     if (!bytes) return '0 B';
     const k = 1024;
@@ -366,41 +413,188 @@ export default function App() {
 
   return (
     <div className="container" onPaste={handlePasteEvent}>
+      {/* Sleek Top Navbar with System Storage Stats */}
       <Header
         apiKey={apiKey}
         onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
         channelHandle={channelHandle}
         onOpenChannelModal={() => setIsChannelModalOpen(true)}
-      />
-
-      <DownloadForm
-        url={url}
-        setUrl={setUrl}
-        isDownloading={isDownloading}
-        onDownload={handleStartDownload}
-        cleanAndExtractUrl={cleanAndExtractUrl}
-        isYouTubeUrl={isYouTubeUrl}
-      />
-
-      <DownloadProgress
-        statusType={statusType}
-        statusText={statusText}
-        progress={progress}
-        isDownloading={isDownloading}
-        videoTitle={videoTitle}
-        downloadStats={downloadStats}
-      />
-
-      <VideoGallery
-        files={recentFiles}
-        loading={loadingFiles}
-        onRefresh={fetchRecentFiles}
+        totalVideosCount={recentFiles.length}
+        totalStorageBytes={folderSizes.all || 0}
         formatFileSize={formatFileSize}
-        onGenerateShorts={handleGenerateShorts}
-        onReviewShort={handleOpenReviewModal}
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
       />
+
+      <div className="dashboard-layout">
+        {/* LEFT SIDE: All Input and Processing */}
+        <aside className="dashboard-left">
+          {/* Download Studio Card */}
+          <div className="studio-card">
+            <div className="studio-card-header">
+              <div className="studio-icon-badge">
+                <Download size={18} />
+              </div>
+              <div>
+                <h2 className="studio-card-title">Download Video</h2>
+                <p className="studio-card-subtitle">
+                  Paste any YouTube video or Shorts link
+                </p>
+              </div>
+            </div>
+
+            <DownloadForm
+              url={url}
+              setUrl={setUrl}
+              isDownloading={isDownloading}
+              onDownload={handleStartDownload}
+              cleanAndExtractUrl={cleanAndExtractUrl}
+              isYouTubeUrl={isYouTubeUrl}
+            />
+
+            {/* Auto-Shorts Toggle */}
+            <div className="studio-actions-row">
+              <label
+                className="studio-toggle-label"
+                title="Automatically create 9:16 Shorts with Hinglish moments right after downloading"
+              >
+                <input
+                  type="checkbox"
+                  checked={autoGenerateShorts}
+                  onChange={(e) => {
+                    setAutoGenerateShorts(e.target.checked);
+                    localStorage.setItem('auto_shorts_enabled', e.target.checked ? 'true' : 'false');
+                  }}
+                />
+                <span className="toggle-slider"></span>
+                <span className="studio-toggle-text">
+                  <Sparkles size={13} color="#ef4444" />
+                  Auto-create AI Shorts
+                </span>
+              </label>
+            </div>
+
+            <div className="paste-tip">
+              <span>💡</span>
+              <span><strong>Tip:</strong> Press <code>Ctrl+V</code> anywhere to auto-paste & start.</span>
+            </div>
+          </div>
+
+          {/* Processing Area */}
+          <div className="processing-section">
+            <DownloadProgress
+              statusType={statusType}
+              statusText={statusText}
+              progress={progress}
+              isDownloading={isDownloading}
+              videoTitle={videoTitle}
+              downloadStats={downloadStats}
+            />
+
+            {/* Live AI Shorts Processing Card */}
+            {isProcessingShorts && (
+              <div className="card live-ai-card">
+                <div className="live-ai-header">
+                  <span className="status-badge status-downloading">
+                    <span className="pulse-dot"></span>
+                    AI Shorts Processing
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsShortsModalOpen(true)}
+                    className="action-btn-subtle"
+                    style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                  >
+                    View Studio
+                  </button>
+                </div>
+                <div style={{ fontSize: '0.825rem', fontWeight: 600, color: '#0f172a', margin: '0.6rem 0 0.25rem' }}>
+                  {shortsStatus || 'Analyzing video highlights with Gemini AI...'}
+                </div>
+                {selectedVideoForShorts && (
+                  <div style={{ fontSize: '0.75rem', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {selectedVideoForShorts.name}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Interactive Storage Overview Card when idle */}
+            {!isDownloading && statusType === 'idle' && !isProcessingShorts && (
+              <div className="card standby-card">
+                <div className="standby-header">
+                  <div className="standby-status-pill">
+                    <span className="status-dot-green"></span>
+                    <span>Ready for links</span>
+                  </div>
+                  <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Filter by Folder</span>
+                </div>
+
+                <div className="storage-destinations">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('downloads')}
+                    className={`storage-item-btn ${activeTab === 'downloads' ? 'active' : ''}`}
+                    title="Click to view full video downloads"
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span className="storage-badge badge-dl">01_Downloads</span>
+                      <span className="storage-desc">Full HD Videos</span>
+                    </div>
+                    <span className="storage-meta-count">
+                      {recentFiles.filter((f) => f.category === 'downloads').length} • {formatFileSize(folderSizes.downloads || 0)}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('drafts')}
+                    className={`storage-item-btn ${activeTab === 'drafts' ? 'active' : ''}`}
+                    title="Click to view 9:16 Shorts waiting for text"
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span className="storage-badge badge-drafts">02_Shorts_Drafts</span>
+                      <span className="storage-desc">Draft Shorts</span>
+                    </div>
+                    <span className="storage-meta-count">
+                      {recentFiles.filter((f) => f.category === 'drafts').length} • {formatFileSize(folderSizes.drafts || 0)}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('ready')}
+                    className={`storage-item-btn ${activeTab === 'ready' ? 'active' : ''}`}
+                    title="Click to view branded ready Shorts"
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span className="storage-badge badge-ready">03_Shorts_Ready</span>
+                      <span className="storage-desc">Ready to Post</span>
+                    </div>
+                    <span className="storage-meta-count">
+                      {recentFiles.filter((f) => f.category === 'ready').length} • {formatFileSize(folderSizes.ready || 0)}
+                    </span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </aside>
+
+        {/* RIGHT SIDE: All Videos Data */}
+        <main className="dashboard-right">
+          <VideoGallery
+            files={recentFiles}
+            loading={loadingFiles}
+            onRefresh={fetchRecentFiles}
+            formatFileSize={formatFileSize}
+            onGenerateShorts={handleGenerateShorts}
+            onReviewShort={handleOpenReviewModal}
+            onDeleteVideo={handleDeleteVideo}
+            onOpenFolder={handleOpenFolder}
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+          />
+        </main>
+      </div>
 
       {/* Gemini API Key Modal */}
       <ApiKeyModal

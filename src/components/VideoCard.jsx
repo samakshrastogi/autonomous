@@ -1,8 +1,14 @@
 import React from 'react';
-import { Sparkles, CheckCircle2, Type, Clock, Download } from 'lucide-react';
+import { Sparkles, CheckCircle2, Type, Clock, Download, Trash2, FolderOpen, Film } from 'lucide-react';
 
-export default function VideoCard({ file, formatFileSize, onGenerateShorts, onReviewShort }) {
-  const isShort = file.category === 'drafts' || file.category === 'ready' || /#shorts|\bshorts\b/i.test(file.name);
+export default function VideoCard({
+  file,
+  formatFileSize,
+  onGenerateShorts,
+  onReviewShort,
+  onDelete
+}) {
+  const isShort = file.category === 'drafts' || file.category === 'ready' || file.name.startsWith('Short -') || /#shorts|\bshorts\b/i.test(file.name);
 
   // Clean title: remove format codes (.f616), raw video IDs [yNd4wg47-PY], and extensions
   const cleanTitle = (name) => {
@@ -22,9 +28,9 @@ export default function VideoCard({ file, formatFileSize, onGenerateShorts, onRe
   });
 
   return (
-    <div className="video-card">
-      {/* Framed Video Player without download control */}
-      <div className="video-frame-container">
+    <div className={`video-card ${isShort ? 'video-card-short' : ''}`}>
+      {/* Framed Video Player with aspect-ratio awareness */}
+      <div className={`video-frame-container ${isShort ? 'frame-vertical-short' : 'frame-landscape-video'}`}>
         <video
           className="video-player"
           controls
@@ -36,7 +42,7 @@ export default function VideoCard({ file, formatFileSize, onGenerateShorts, onRe
           Your browser does not support the video tag.
         </video>
 
-        {/* Status Pill on Video Frame */}
+        {/* Top-Left Category Status Badge */}
         {file.category === 'ready' ? (
           <span className="shorts-tag-ready">
             ✅ Ready Short
@@ -54,6 +60,33 @@ export default function VideoCard({ file, formatFileSize, onGenerateShorts, onRe
             Shorts
           </span>
         ) : null}
+
+        {/* Top-Right Quick Action Hover Buttons */}
+        <div className="frame-quick-actions">
+          <a
+            href={file.url}
+            download={file.name}
+            className="frame-action-btn"
+            title="Download file to device"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Download size={13} />
+          </a>
+
+          {onDelete && (
+            <button
+              type="button"
+              className="frame-action-btn frame-delete-btn"
+              title="Delete video file from disk"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(file);
+              }}
+            >
+              <Trash2 size={13} />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Video Information & Actions */}
@@ -88,10 +121,10 @@ export default function VideoCard({ file, formatFileSize, onGenerateShorts, onRe
               <button
                 type="button"
                 onClick={() => onReviewShort(file)}
-                className="action-btn-secondary"
+                className="action-btn-green"
                 title="Edit text hook or channel handle on this Short"
               >
-                <Type size={12} color="#16a34a" />
+                <Type size={12} />
                 <span>Edit Text</span>
               </button>
             ) : (!file.category || file.category === 'downloads') && onGenerateShorts ? (
@@ -102,16 +135,16 @@ export default function VideoCard({ file, formatFileSize, onGenerateShorts, onRe
                 title="Generate 9:16 viral Shorts with Gemini AI in Hinglish"
               >
                 <Sparkles size={12} />
-                <span>Shorts</span>
+                <span>AI Shorts</span>
               </button>
             ) : isShort && onReviewShort ? (
               <button
                 type="button"
                 onClick={() => onReviewShort(file)}
-                className="action-btn-secondary"
+                className="action-btn-amber"
               >
-                <Type size={12} color="#ef4444" />
-                <span>Add / Edit Text</span>
+                <Type size={12} />
+                <span>Add Text</span>
               </button>
             ) : (
               <span className="short-ready-badge" title="Already in vertical Shorts format">

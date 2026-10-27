@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link2, Clipboard, X } from 'lucide-react';
+import { Link2, Clipboard, X, Download } from 'lucide-react';
 
 export default function DownloadForm({
   url,
@@ -46,14 +46,14 @@ export default function DownloadForm({
   };
 
   return (
-    <div className="omnibar-container">
+    <div className="omnibar-container" style={{ marginBottom: 0 }}>
       <form onSubmit={handleSubmit} className="omnibar-form">
         <Link2 size={18} className="omnibar-icon" />
 
         <input
           type="text"
           className="omnibar-input"
-          placeholder="Paste YouTube or Shorts link here..."
+          placeholder="Paste YouTube or Shorts link..."
           value={url}
           onChange={handleInputChange}
           disabled={isDownloading}
@@ -68,7 +68,7 @@ export default function DownloadForm({
             onClick={() => setUrl('')}
             disabled={isDownloading}
           >
-            <X size={16} />
+            <X size={15} />
           </button>
         )}
 
@@ -79,9 +79,21 @@ export default function DownloadForm({
           onClick={handleClipboardPaste}
           disabled={isDownloading}
         >
-          <Clipboard size={15} />
+          <Clipboard size={14} />
           <span>Paste</span>
         </button>
+
+        {url && (
+          <button
+            type="submit"
+            className="omnibar-download-btn"
+            title="Download video"
+            disabled={isDownloading}
+          >
+            <Download size={14} />
+            <span>Download</span>
+          </button>
+        )}
       </form>
     </div>
   );

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Film, RotateCcw, Clock, CheckCircle2, Download, Layers } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Film, RotateCcw, Clock, CheckCircle2, Download, Layers, Search, X, FolderOpen, ArrowUpDown } from 'lucide-react';
 import VideoCard from './VideoCard.jsx';
 
 export default function VideoGallery({
@@ -9,10 +9,15 @@ export default function VideoGallery({
   formatFileSize,
   onGenerateShorts,
   onReviewShort,
+  onDeleteVideo,
+  onOpenFolder,
   activeTab = 'all',
   setActiveTab
 }) {
   const [localTab, setLocalTab] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState('newest'); // 'newest' | 'oldest' | 'size_desc' | 'size_asc' | 'title'
+
   const currentTab = setActiveTab ? activeTab : localTab;
   const handleTabChange = setActiveTab || setLocalTab;
 
@@ -22,24 +27,104 @@ export default function VideoGallery({
   const readyCount = files.filter((f) => f.category === 'ready').length;
   const allCount = files.length;
 
-  // Filter files based on selected tab
-  const filteredFiles = currentTab === 'all'
-    ? files
-    : files.filter((f) => f.category === currentTab);
+  // Filter and sort files
+  const filteredAndSortedFiles = useMemo(() => {
+    // 1. Filter by category tab
+    let list = currentTab === 'all'
+      ? files
+      : files.filter((f) => f.category === currentTab);
+
+    // 2. Filter by search query
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter((f) => f.name.toLowerCase().includes(q));
+    }
+
+    // 3. Sort files
+    const sorted = [...list];
+    if (sortBy === 'newest') {
+      sorted.sort((a, b) => b.mtime - a.mtime);
+    } else if (sortBy === 'oldest') {
+      sorted.sort((a, b) => a.mtime - b.mtime);
+    } else if (sortBy === 'size_desc') {
+      sorted.sort((a, b) => (b.size || 0) - (a.size || 0));
+    } else if (sortBy === 'size_asc') {
+      sorted.sort((a, b) => (a.size || 0) - (b.size || 0));
+    } else if (sortBy === 'title') {
+      sorted.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    return sorted;
+  }, [files, currentTab, searchQuery, sortBy]);
 
   return (
-    <div>
-      {/* Gallery Header */}
-      <div className="gallery-header">
-        <div className="gallery-title">
-          <Film size={22} color="#ef4444" />
-          <span>Video Library</span>
-          <span className="gallery-total-badge">
-            {allCount}
-          </span>
+    <div className="gallery-section">
+      {/* Gallery Header: Title, Search, Sort & Refresh */}
+      <div className="gallery-header-row">
+        <div className="gallery-title-group">
+          <div className="gallery-title">
+            <Film size={22} color="#ef4444" />
+            <span>Video Library</span>
+            <span className="gallery-total-badge" title="Total videos in this view">
+              {filteredAndSortedFiles.length}
+            </span>
+          </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+        {/* Search, Sort, Open Folder & Refresh Controls */}
+        <div className="gallery-controls-group">
+          {/* Real-time Search Box */}
+          <div className="gallery-search-box">
+            <Search size={14} className="search-icon" />
+            <input
+              type="text"
+              placeholder="Search videos..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="search-input"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="search-clear-btn"
+                title="Clear search"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+
+          {/* Sort By Dropdown */}
+          <div className="gallery-sort-wrap" title="Sort videos">
+            <ArrowUpDown size={13} className="sort-icon" />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="gallery-sort-select"
+            >
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+              <option value="size_desc">Largest Size</option>
+              <option value="size_asc">Smallest Size</option>
+              <option value="title">Title (A-Z)</option>
+            </select>
+          </div>
+
+          {/* Open Folder in Windows Explorer */}
+          {onOpenFolder && (
+            <button
+              type="button"
+              onClick={() => onOpenFolder(currentTab)}
+              className="action-btn-subtle"
+              title="Open current folder in Windows Explorer"
+            >
+              <FolderOpen size={14} />
+              <span className="hide-on-mobile">Folder</span>
+            </button>
+          )}
+
+          {/* Refresh Button */}
           <button
             type="button"
             onClick={onRefresh}
@@ -48,7 +133,7 @@ export default function VideoGallery({
             disabled={loading}
           >
             <RotateCcw size={14} className={loading ? 'spin' : ''} />
-            <span>Refresh</span>
+            <span className="hide-on-mobile">Refresh</span>
           </button>
         </div>
       </div>
@@ -61,7 +146,7 @@ export default function VideoGallery({
             className={`gallery-tab-btn ${currentTab === 'all' ? 'active' : ''}`}
             onClick={() => handleTabChange('all')}
           >
-            <Layers size={15} />
+            <Layers size={14} />
             <span>All Videos</span>
             <span className="tab-pill tab-pill-neutral">{allCount}</span>
           </button>
@@ -72,7 +157,7 @@ export default function VideoGallery({
             onClick={() => handleTabChange('downloads')}
             title="Full length YouTube downloads in 01_Downloads"
           >
-            <Download size={15} />
+            <Download size={14} />
             <span>Downloads</span>
             <span className="tab-pill tab-pill-blue">{downloadsCount}</span>
           </button>
@@ -83,7 +168,7 @@ export default function VideoGallery({
             onClick={() => handleTabChange('drafts')}
             title="9:16 Shorts waiting for custom text in 02_Shorts_Drafts"
           >
-            <Clock size={15} />
+            <Clock size={14} />
             <span>Waiting for Text</span>
             <span className={`tab-pill ${draftsCount > 0 ? 'tab-pill-amber' : 'tab-pill-neutral'}`}>
               {draftsCount}
@@ -96,7 +181,7 @@ export default function VideoGallery({
             onClick={() => handleTabChange('ready')}
             title="Completed branded Shorts in 03_Shorts_Ready"
           >
-            <CheckCircle2 size={15} />
+            <CheckCircle2 size={14} />
             <span>Ready Shorts</span>
             <span className={`tab-pill ${readyCount > 0 ? 'tab-pill-green' : 'tab-pill-neutral'}`}>
               {readyCount}
@@ -113,10 +198,27 @@ export default function VideoGallery({
         </div>
       </div>
 
-      {/* Video Grid or Tab-Specific Empty State */}
-      {filteredFiles.length === 0 ? (
+      {/* Video Grid or Search / Tab Empty State */}
+      {filteredAndSortedFiles.length === 0 ? (
         <div className="empty-state">
-          {currentTab === 'drafts' ? (
+          {searchQuery ? (
+            <>
+              <Search size={36} color="#94a3b8" style={{ margin: '0 auto 0.5rem' }} />
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 600, color: '#334155', marginBottom: '0.35rem' }}>
+                No videos match "{searchQuery}"
+              </h3>
+              <p style={{ fontSize: '0.875rem', color: '#64748b' }}>
+                Try searching with a different keyword or{' '}
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  style={{ background: 'none', border: 'none', color: '#ef4444', textDecoration: 'underline', cursor: 'pointer', fontWeight: 600 }}
+                >
+                  clear search
+                </button>
+              </p>
+            </>
+          ) : currentTab === 'drafts' ? (
             <>
               <CheckCircle2 size={36} color="#16a34a" style={{ margin: '0 auto 0.5rem' }} />
               <h3 style={{ fontSize: '1.05rem', fontWeight: 600, color: '#166534', marginBottom: '0.35rem' }}>
@@ -143,7 +245,7 @@ export default function VideoGallery({
                 No Downloads Yet
               </h3>
               <p style={{ fontSize: '0.875rem', color: '#64748b' }}>
-                Paste any YouTube URL above and it will download automatically into 01_Downloads.
+                Paste any YouTube URL in the left studio panel to download in HD into 01_Downloads.
               </p>
             </>
           ) : (
@@ -153,20 +255,21 @@ export default function VideoGallery({
                 No videos downloaded yet
               </h3>
               <p style={{ fontSize: '0.9rem', color: '#64748b' }}>
-                Paste a YouTube link above and it will download automatically.
+                Paste a YouTube or Shorts link in the left panel to begin.
               </p>
             </>
           )}
         </div>
       ) : (
         <div className="video-grid">
-          {filteredFiles.map((file, idx) => (
+          {filteredAndSortedFiles.map((file, idx) => (
             <VideoCard
               key={`${file.name}-${idx}`}
               file={file}
               formatFileSize={formatFileSize}
               onGenerateShorts={onGenerateShorts}
               onReviewShort={onReviewShort}
+              onDelete={onDeleteVideo}
             />
           ))}
         </div>

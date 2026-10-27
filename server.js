@@ -115,7 +115,13 @@ app.get('/api/status', (req, res) => {
 
 // API: Open download folder in Windows Explorer
 app.post('/api/open-folder', (req, res) => {
-  const targetDir = req.body.dir || ROOT_VIDEOS_DIR;
+  let targetDir = req.body.dir;
+  if (!targetDir) {
+    if (req.body.category === 'downloads') targetDir = FOLDERS.DOWNLOADS;
+    else if (req.body.category === 'drafts') targetDir = FOLDERS.SHORTS_DRAFTS;
+    else if (req.body.category === 'ready') targetDir = FOLDERS.SHORTS_READY;
+    else targetDir = ROOT_VIDEOS_DIR;
+  }
   if (!fs.existsSync(targetDir)) {
     try {
       fs.mkdirSync(targetDir, { recursive: true });
@@ -173,16 +179,53 @@ app.get('/api/files', (req, res) => {
   // Sort overall newest first
   allFiles.sort((a, b) => b.mtime - a.mtime);
 
+  const allCount = allFiles.length;
+  const downloadsCount = allFiles.filter((f) => f.category === 'downloads').length;
+  const draftsCount = allFiles.filter((f) => f.category === 'drafts').length;
+  const readyCount = allFiles.filter((f) => f.category === 'ready').length;
+
+  const totalSizeAll = allFiles.reduce((acc, f) => acc + (f.size || 0), 0);
+  const totalSizeDownloads = allFiles.filter((f) => f.category === 'downloads').reduce((acc, f) => acc + (f.size || 0), 0);
+  const totalSizeDrafts = allFiles.filter((f) => f.category === 'drafts').reduce((acc, f) => acc + (f.size || 0), 0);
+  const totalSizeReady = allFiles.filter((f) => f.category === 'ready').reduce((acc, f) => acc + (f.size || 0), 0);
+
   res.json({
     files: allFiles,
     counts: {
-      all: allFiles.length,
-      downloads: allFiles.filter((f) => f.category === 'downloads').length,
-      drafts: allFiles.filter((f) => f.category === 'drafts').length,
-      ready: allFiles.filter((f) => f.category === 'ready').length
+      all: allCount,
+      downloads: downloadsCount,
+      drafts: draftsCount,
+      ready: readyCount
+    },
+    sizes: {
+      all: totalSizeAll,
+      downloads: totalSizeDownloads,
+      drafts: totalSizeDrafts,
+      ready: totalSizeReady
     },
     directories: FOLDERS
   });
+});
+
+// API: Delete video file
+app.post('/api/delete', (req, res) => {
+  const { filename } = req.body;
+  if (!filename) {
+    return res.status(400).json({ error: 'Filename is required' });
+  }
+  const cleanName = path.basename(filename);
+  const found = findVideoFile(cleanName);
+  if (!found || !fs.existsSync(found.foundPath)) {
+    return res.status(404).json({ error: 'File not found on disk' });
+  }
+  try {
+    fs.unlinkSync(found.foundPath);
+    console.log(`[Deleted] File ${cleanName} removed from ${found.subfolder}`);
+    res.json({ success: true, message: `Removed ${cleanName}` });
+  } catch (err) {
+    console.error(`Error deleting ${cleanName}:`, err);
+    res.status(500).json({ error: err.message || 'Failed to delete file' });
+  }
 });
 
 // API: Stream video file directly to browser for in-frame playback
