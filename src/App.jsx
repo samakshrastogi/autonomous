@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Download } from 'lucide-react';
+import { Download, Clock, CheckCircle2, Sparkles } from 'lucide-react';
 import Header from './components/Header.jsx';
 import DownloadForm from './components/DownloadForm.jsx';
 import DownloadProgress from './components/DownloadProgress.jsx';
@@ -428,6 +428,57 @@ export default function App() {
             />
           </div>
 
+          {/* Creator Navigation Menu */}
+          <div className="sidebar-nav-menu">
+            <button
+              type="button"
+              onClick={() => setActiveTab('downloads')}
+              className={`sidebar-nav-item ${activeTab === 'downloads' ? 'active-dl' : ''}`}
+            >
+              <div className="nav-item-left">
+                <div className="nav-icon-badge icon-dl">
+                  <Download size={14} />
+                </div>
+                <span className="nav-item-label">Downloads</span>
+              </div>
+              <span className="nav-item-count count-dl">
+                {recentFiles.filter((f) => f.category === 'downloads').length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('drafts')}
+              className={`sidebar-nav-item ${activeTab === 'drafts' ? 'active-drafts' : ''}`}
+            >
+              <div className="nav-item-left">
+                <div className="nav-icon-badge icon-drafts">
+                  <Clock size={14} />
+                </div>
+                <span className="nav-item-label">Pre Ready Shorts</span>
+              </div>
+              <span className="nav-item-count count-drafts">
+                {recentFiles.filter((f) => f.category === 'drafts').length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('ready')}
+              className={`sidebar-nav-item ${activeTab === 'ready' ? 'active-ready' : ''}`}
+            >
+              <div className="nav-item-left">
+                <div className="nav-icon-badge icon-ready">
+                  <CheckCircle2 size={14} />
+                </div>
+                <span className="nav-item-label">Shorts</span>
+              </div>
+              <span className="nav-item-count count-ready">
+                {recentFiles.filter((f) => f.category === 'ready').length}
+              </span>
+            </button>
+          </div>
+
           {/* Processing Area */}
           <div className="processing-section">
             <DownloadProgress
@@ -456,48 +507,8 @@ export default function App() {
                     View
                   </button>
                 </div>
-                <div style={{ fontSize: '0.825rem', fontWeight: 600, color: '#0f172a', margin: '0.5rem 0 0.2rem' }}>
+                <div style={{ fontSize: '0.825rem', fontWeight: 600, color: '#f8fafc', margin: '0.5rem 0 0.2rem' }}>
                   {shortsStatus || 'Finding viral moments with AI...'}
-                </div>
-              </div>
-            )}
-
-            {/* Category Quick Filter Buttons */}
-            {!isDownloading && statusType === 'idle' && !isProcessingShorts && (
-              <div className="card standby-card" style={{ padding: '0.75rem' }}>
-                <div className="storage-destinations">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('downloads')}
-                    className={`storage-item-btn ${activeTab === 'downloads' ? 'active' : ''}`}
-                  >
-                    <span className="storage-badge badge-dl">Downloads</span>
-                    <span className="storage-meta-count">
-                      {recentFiles.filter((f) => f.category === 'downloads').length}
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('drafts')}
-                    className={`storage-item-btn ${activeTab === 'drafts' ? 'active' : ''}`}
-                  >
-                    <span className="storage-badge badge-drafts">Pre Ready Shorts</span>
-                    <span className="storage-meta-count">
-                      {recentFiles.filter((f) => f.category === 'drafts').length}
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('ready')}
-                    className={`storage-item-btn ${activeTab === 'ready' ? 'active' : ''}`}
-                  >
-                    <span className="storage-badge badge-ready">Shorts</span>
-                    <span className="storage-meta-count">
-                      {recentFiles.filter((f) => f.category === 'ready').length}
-                    </span>
-                  </button>
                 </div>
               </div>
             )}

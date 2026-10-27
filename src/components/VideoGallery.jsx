@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Film, Clock, CheckCircle2, Download, Search, X, ArrowUpDown } from 'lucide-react';
+import { Film, Clock, CheckCircle2, Download, Search, X, ArrowUpDown, Sparkles } from 'lucide-react';
 import VideoCard from './VideoCard.jsx';
 
 export default function VideoGallery({
@@ -15,14 +15,8 @@ export default function VideoGallery({
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('newest'); // 'newest' | 'oldest' | 'size_desc' | 'size_asc' | 'title'
 
-  // Enforce one of the 3 allowed tabs: 'downloads', 'drafts', 'ready'
+  // Current category tab
   const currentTab = (setActiveTab ? activeTab : localTab) === 'all' ? 'downloads' : (setActiveTab ? activeTab : localTab);
-  const handleTabChange = setActiveTab || setLocalTab;
-
-  // Compute category counts
-  const downloadsCount = files.filter((f) => f.category === 'downloads').length;
-  const draftsCount = files.filter((f) => f.category === 'drafts').length;
-  const readyCount = files.filter((f) => f.category === 'ready').length;
 
   // Filter and sort files
   const filteredAndSortedFiles = useMemo(() => {
@@ -54,19 +48,37 @@ export default function VideoGallery({
 
   return (
     <div className="gallery-section">
-      {/* Gallery Header Row */}
+      {/* Gallery View Header: Category Title Badge, Count, Search & Sort */}
       <div className="gallery-header-row">
         <div className="gallery-title-group">
           <div className="gallery-title">
-            <Film size={20} color="#ef4444" />
-            <span>Library</span>
+            <span className={`gallery-view-badge view-${currentTab}`}>
+              {currentTab === 'downloads' && (
+                <>
+                  <Download size={15} />
+                  <span>Downloads</span>
+                </>
+              )}
+              {currentTab === 'drafts' && (
+                <>
+                  <Clock size={15} />
+                  <span>Pre Ready Shorts</span>
+                </>
+              )}
+              {currentTab === 'ready' && (
+                <>
+                  <CheckCircle2 size={15} />
+                  <span>Shorts</span>
+                </>
+              )}
+            </span>
             <span className="gallery-total-badge">
               {filteredAndSortedFiles.length}
             </span>
           </div>
         </div>
 
-        {/* Search & Sort Controls (Folder & Refresh removed per request) */}
+        {/* Search & Sort Controls */}
         <div className="gallery-controls-group">
           {/* Real-time Search Box */}
           <div className="gallery-search-box">
@@ -108,50 +120,11 @@ export default function VideoGallery({
         </div>
       </div>
 
-      {/* Segmented Status Tabs: ONLY Downloads, Pre Ready Shorts, and Shorts */}
-      <div className="gallery-tabs-container" style={{ marginBottom: '1.25rem' }}>
-        <div className="gallery-tabs-bar">
-          <button
-            type="button"
-            className={`gallery-tab-btn ${currentTab === 'downloads' ? 'active' : ''}`}
-            onClick={() => handleTabChange('downloads')}
-          >
-            <Download size={14} />
-            <span>Downloads</span>
-            <span className="tab-pill tab-pill-blue">{downloadsCount}</span>
-          </button>
-
-          <button
-            type="button"
-            className={`gallery-tab-btn ${currentTab === 'drafts' ? 'active' : ''}`}
-            onClick={() => handleTabChange('drafts')}
-          >
-            <Clock size={14} />
-            <span>Pre Ready Shorts</span>
-            <span className={`tab-pill ${draftsCount > 0 ? 'tab-pill-amber' : 'tab-pill-neutral'}`}>
-              {draftsCount}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            className={`gallery-tab-btn ${currentTab === 'ready' ? 'active' : ''}`}
-            onClick={() => handleTabChange('ready')}
-          >
-            <CheckCircle2 size={14} />
-            <span>Shorts</span>
-            <span className={`tab-pill ${readyCount > 0 ? 'tab-pill-green' : 'tab-pill-neutral'}`}>
-              {readyCount}
-            </span>
-          </button>
-        </div>
-      </div>
-
-      {/* Video Grid or Minimal Empty State */}
+      {/* Video Grid or Minimal Dark Empty State */}
       {filteredAndSortedFiles.length === 0 ? (
         <div className="empty-state">
           {searchQuery ? (
-            <p style={{ fontSize: '0.9rem', color: '#64748b' }}>
+            <p style={{ fontSize: '0.9rem', color: '#94a3b8' }}>
               No matches for "{searchQuery}".{' '}
               <button
                 type="button"
@@ -162,16 +135,16 @@ export default function VideoGallery({
               </button>
             </p>
           ) : currentTab === 'drafts' ? (
-            <p style={{ fontSize: '0.9rem', color: '#64748b' }}>
+            <p style={{ fontSize: '0.9rem', color: '#94a3b8' }}>
               No pre ready shorts. Download a video to auto-create clips.
             </p>
           ) : currentTab === 'ready' ? (
-            <p style={{ fontSize: '0.9rem', color: '#64748b' }}>
+            <p style={{ fontSize: '0.9rem', color: '#94a3b8' }}>
               No shorts ready. Click "Add Text" on pre ready shorts.
             </p>
           ) : (
-            <p style={{ fontSize: '0.9rem', color: '#64748b' }}>
-              No videos downloaded. Paste a link to start.
+            <p style={{ fontSize: '0.9rem', color: '#94a3b8' }}>
+              No videos downloaded. Paste a link on the left to start.
             </p>
           )}
         </div>
