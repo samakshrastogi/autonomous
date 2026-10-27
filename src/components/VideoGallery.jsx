@@ -71,9 +71,9 @@ export default function VideoGallery({
                   <span>Shorts</span>
                 </>
               )}
-            </span>
-            <span className="gallery-total-badge">
-              {filteredAndSortedFiles.length}
+              <span className="gallery-total-badge">
+                {filteredAndSortedFiles.length}
+              </span>
             </span>
           </div>
         </div>

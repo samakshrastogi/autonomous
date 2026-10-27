@@ -22,36 +22,29 @@ export default function Header({
         <button
           type="button"
           onClick={onOpenChannelModal}
-          className="api-key-pill"
+          className="header-glass-pill pill-channel"
           title="Channel Username"
         >
-          {channelHandle ? (
-            <>
-              <AtSign size={13} color="#2563eb" />
-              <span style={{ color: '#1e40af', fontWeight: 600 }}>{channelHandle}</span>
-            </>
-          ) : (
-            <>
-              <AtSign size={13} color="#64748b" />
-              <span>Channel</span>
-            </>
-          )}
+          <AtSign size={13} color="#60a5fa" />
+          <span>{channelHandle || '@AddChannel'}</span>
         </button>
 
         <button
           type="button"
           onClick={onOpenApiKeyModal}
-          className="api-key-pill"
+          className="header-glass-pill pill-ai"
           title="AI Key"
         >
           {apiKey ? (
             <>
-              <Sparkles size={13} color="#16a34a" />
-              <span style={{ color: '#15803d', fontWeight: 600 }}>AI Connected</span>
+              <span className="header-status-dot active"></span>
+              <Sparkles size={13} color="#34d399" />
+              <span>AI Connected</span>
             </>
           ) : (
             <>
-              <Key size={13} color="#ef4444" />
+              <span className="header-status-dot"></span>
+              <Key size={13} color="#f87171" />
               <span>Connect AI</span>
             </>
           )}
