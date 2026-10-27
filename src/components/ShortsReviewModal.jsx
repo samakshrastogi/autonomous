@@ -1,5 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Type, AtSign, X, Check, Film, Loader2 } from 'lucide-react';
+import { Sparkles, AtSign, X, Check, Film, Loader2 } from 'lucide-react';
+
+const HOOK_PRESETS = [
+  "Wait for the end! 😱",
+  "Papa ka reaction dekh ke dang! 😂",
+  "Ye kya ho gaya?! 🤯",
+  "Don't miss this! 🔥"
+];
+
+const cleanShortTitle = (rawName) => {
+  if (!rawName) return '';
+  return rawName.replace(/^Short\s*-\s*/i, '').replace(/\.mp4$/i, '');
+};
 
 export default function ShortsReviewModal({
   isOpen,
@@ -46,7 +58,7 @@ export default function ShortsReviewModal({
   const handleApply = async (e) => {
     e.preventDefault();
     if (!topText.trim() && !handle.trim()) {
-      setError('Please provide top text or a channel handle to apply.');
+      setError('Please provide top hook text or a channel watermark.');
       return;
     }
 
@@ -63,7 +75,7 @@ export default function ShortsReviewModal({
         channelHandle: cleanHandle
       });
     } catch (err) {
-      setError(err.message || 'Failed to burn text to Short');
+      setError(err.message || 'Failed to update Short');
     }
   };
 
@@ -73,15 +85,18 @@ export default function ShortsReviewModal({
         className="modal-content review-modal-content"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="modal-header" style={{ marginBottom: '0.85rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-            <Type size={20} color="#ef4444" />
+        {/* Modal Header */}
+        <div className="modal-header review-modal-header">
+          <div className="review-header-title-box">
+            <div className="review-header-icon-glow">
+              <Sparkles size={18} color="#ef4444" />
+            </div>
             <div>
-              <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#0f172a' }}>
-                Review Short & Add Text
+              <h3 className="review-header-title">
+                Customize Short & Branding
               </h3>
-              <p style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '0.1rem' }}>
-                Live visual preview: customize top hook & bottom username before burning
+              <p className="review-header-subtitle">
+                Add viral hook text and channel watermark before publishing
               </p>
             </div>
           </div>
@@ -98,13 +113,13 @@ export default function ShortsReviewModal({
         </div>
 
         {error && (
-          <div style={{ background: '#fef2f2', border: '1px solid #fecaca', padding: '0.65rem 0.85rem', borderRadius: '0.55rem', color: '#b91c1c', fontSize: '0.825rem', marginBottom: '0.9rem' }}>
+          <div className="review-error-card">
             {error}
           </div>
         )}
 
         <div className="review-modal-body">
-          {/* 9:16 Vertical Live Preview Frame */}
+          {/* 9:16 Vertical Live Preview Stage */}
           <div className="review-preview-column">
             <div className="review-video-stage">
               <video
@@ -117,117 +132,133 @@ export default function ShortsReviewModal({
                 key={shortFile.url}
               />
 
-              {/* Live Overlay: Top Hook Text (Above center video) */}
+              {/* Live Overlay: Top Hook Text (positioned matching video render) */}
               {topText.trim() && (
-                <div className="live-overlay-top">
-                  <div className="overlay-top-box">
+                <div className="review-top-text-overlay">
+                  <div className="review-hook-badge">
                     {topText}
                   </div>
                 </div>
               )}
 
-              {/* Live Overlay: Bottom Channel Username (Below center video) */}
+              {/* Live Overlay: Bottom Channel Username */}
               {handle.trim() && (
-                <div className="live-overlay-bottom">
-                  <div className="overlay-bottom-box">
+                <div className="review-bottom-handle-overlay">
+                  <div className="handle-pill">
                     {handle.startsWith('@') ? handle : `@${handle}`}
                   </div>
                 </div>
               )}
             </div>
-            <div style={{ fontSize: '0.75rem', color: '#64748b', textAlign: 'center', marginTop: '0.4rem' }}>
-              🔴 Live Preview Mockup (matches final 1080x1920 video)
+
+            <div className="review-preview-badge">
+              <span className="live-dot-pulse"></span>
+              <span>9:16 Live Preview</span>
             </div>
           </div>
 
-          {/* Controls Column */}
+          {/* Form & Controls Column */}
           <form className="review-controls-column" onSubmit={handleApply}>
-            <div style={{ background: '#f8fafc', padding: '0.6rem 0.75rem', borderRadius: '0.55rem', border: '1px solid #e2e8f0', fontSize: '0.8rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '0.45rem', marginBottom: '0.85rem' }}>
+            {/* Source Video Pill */}
+            <div className="review-source-pill">
               <Film size={14} color="#ef4444" style={{ flexShrink: 0 }} />
-              <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {shortFile.name}
+              <span className="review-source-title">
+                {cleanShortTitle(shortFile.name)}
               </span>
             </div>
 
-            <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.825rem', fontWeight: 600, color: '#1e293b', marginBottom: '0.4rem' }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#eab308', display: 'inline-block' }}></span>
-                  Top Text (Above Video)
-                </span>
-                <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 400 }}>
-                  High-retention viral hook
-                </span>
-              </label>
+            {/* Top Hook Section */}
+            <div className="review-field-group">
+              <div className="review-field-header">
+                <label className="review-field-label">
+                  <span className="dot-indicator" style={{ background: '#eab308' }}></span>
+                  <span>Top Hook Text</span>
+                </label>
+                <span className="review-tag-gold">Hook</span>
+              </div>
+
               <textarea
                 value={topText}
                 onChange={(e) => setTopText(e.target.value)}
                 placeholder="e.g. Wait for Papa's epic reaction... 😂"
                 rows={2}
                 disabled={isProcessing}
-                className="url-input"
-                style={{ fontSize: '0.875rem', resize: 'vertical', minHeight: '56px', width: '100%', fontFamily: 'inherit' }}
+                className="review-textarea"
               />
+
+              {/* Quick Suggestion Chips */}
+              <div className="review-hook-chips">
+                {HOOK_PRESETS.map((preset, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    disabled={isProcessing}
+                    className="review-chip-btn"
+                    onClick={() => setTopText(preset)}
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div style={{ marginBottom: '1.25rem' }}>
-              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.825rem', fontWeight: 600, color: '#1e293b', marginBottom: '0.4rem' }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                  <AtSign size={13} color="#2563eb" />
-                  Channel Username (Bottom Center)
-                </span>
-                <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 400 }}>
-                  Permanent watermark
-                </span>
-              </label>
+            {/* Channel Handle Section */}
+            <div className="review-field-group">
+              <div className="review-field-header">
+                <label className="review-field-label">
+                  <AtSign size={13} color="#38bdf8" />
+                  <span>Channel Watermark</span>
+                </label>
+                <span className="review-tag-cyan">Branding</span>
+              </div>
+
               <input
                 type="text"
                 value={handle}
                 onChange={(e) => setHandle(e.target.value)}
                 placeholder="e.g. @yourchannel"
                 disabled={isProcessing}
-                className="url-input"
-                style={{ fontSize: '0.875rem', padding: '0.6rem 0.8rem', width: '100%' }}
+                className="review-input"
               />
             </div>
 
+            {/* Processing State */}
             {isProcessing && (
-              <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '0.55rem', padding: '0.75rem', marginBottom: '1rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.825rem', color: '#1d4ed8', fontWeight: 600 }}>
-                  <Loader2 size={16} className="spin" />
-                  <span>Burning text & branding into 9:16 Short (takes ~15s)...</span>
+              <div className="review-processing-card">
+                <div className="review-processing-status">
+                  <Loader2 size={15} className="spin" color="#ef4444" />
+                  <span>Creating branded 9:16 Short...</span>
                 </div>
-                <div className="progress-track" style={{ height: '6px', margin: '0.5rem 0 0' }}>
-                  <div className="progress-fill progress-indeterminate" style={{ width: '100%' }}></div>
+                <div className="progress-track" style={{ height: '6px', margin: '0.6rem 0 0' }}>
+                  <div className="progress-fill progress-indeterminate" style={{ width: '100%', background: 'linear-gradient(90deg, #ef4444, #f59e0b)' }}></div>
                 </div>
               </div>
             )}
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: 'auto', paddingTop: '0.75rem', borderTop: '1px solid #f1f5f9' }}>
+            {/* Actions Bar */}
+            <div className="review-actions-bar">
               <button
                 type="button"
                 onClick={onClose}
-                className="action-btn-subtle"
-                style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+                className="review-btn-cancel"
                 disabled={isProcessing}
               >
-                Close
+                Cancel
               </button>
               <button
                 type="submit"
-                className="btn-primary"
-                style={{ padding: '0.55rem 1.35rem', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '0.45rem' }}
+                className="review-btn-submit"
                 disabled={isProcessing}
               >
                 {isProcessing ? (
                   <>
                     <Loader2 size={15} className="spin" />
-                    <span>Applying...</span>
+                    <span>Saving...</span>
                   </>
                 ) : (
                   <>
-                    <Check size={15} />
-                    <span>Burn Text to Video</span>
+                    <Sparkles size={15} />
+                    <span>Apply to Video</span>
                   </>
                 )}
               </button>
