@@ -5,7 +5,7 @@ import DownloadForm from './components/DownloadForm.jsx';
 import DownloadProgress from './components/DownloadProgress.jsx';
 import VideoGallery from './components/VideoGallery.jsx';
 import ApiKeyModal from './components/ApiKeyModal.jsx';
-import ShortsGeneratorModal from './components/ShortsGeneratorModal.jsx';
+import ShortsGeneratorSidebar from './components/ShortsGeneratorSidebar.jsx';
 import ChannelHandleModal from './components/ChannelHandleModal.jsx';
 import ShortsReviewModal from './components/ShortsReviewModal.jsx';
 
@@ -89,7 +89,6 @@ export default function App() {
   };
 
   const handleReviewFromGenerator = (short) => {
-    setIsShortsModalOpen(false);
     handleOpenReviewModal(short, short.hook);
   };
 
@@ -290,7 +289,6 @@ export default function App() {
     }
 
     setSelectedVideoForShorts(file);
-    setIsShortsModalOpen(true);
     setIsProcessingShorts(true);
     setShortsStatus('Finding viral moments...');
     setDiscoveredMoments([]);
@@ -490,28 +488,23 @@ export default function App() {
               downloadStats={downloadStats}
             />
 
-            {/* Live AI Processing Card */}
-            {isProcessingShorts && (
-              <div className="card live-ai-card">
-                <div className="live-ai-header">
-                  <span className="status-badge status-downloading">
-                    <span className="pulse-dot"></span>
-                    Processing Shorts
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setIsShortsModalOpen(true)}
-                    className="action-btn-subtle"
-                    style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
-                  >
-                    View
-                  </button>
-                </div>
-                <div style={{ fontSize: '0.825rem', fontWeight: 600, color: '#f8fafc', margin: '0.5rem 0 0.2rem' }}>
-                  {shortsStatus || 'Finding viral moments with AI...'}
-                </div>
-              </div>
-            )}
+            {/* Embedded Shorts Generator in Left Sidebar */}
+            <ShortsGeneratorSidebar
+              videoFile={selectedVideoForShorts}
+              generationStatus={shortsStatus}
+              discoveredMoments={discoveredMoments}
+              generatedShorts={generatedShorts}
+              isProcessing={isProcessingShorts}
+              error={shortsError}
+              onClose={() => {
+                setSelectedVideoForShorts(null);
+                setShortsStatus('');
+                setDiscoveredMoments([]);
+                setGeneratedShorts([]);
+                setShortsError('');
+              }}
+              onReviewGeneratedShort={handleReviewFromGenerator}
+            />
           </div>
         </aside>
 
@@ -542,18 +535,6 @@ export default function App() {
         onClose={() => setIsChannelModalOpen(false)}
         channelHandle={channelHandle}
         onSaveHandle={handleSaveChannelHandle}
-      />
-
-      <ShortsGeneratorModal
-        isOpen={isShortsModalOpen}
-        onClose={() => setIsShortsModalOpen(false)}
-        videoFile={selectedVideoForShorts}
-        generationStatus={shortsStatus}
-        discoveredMoments={discoveredMoments}
-        generatedShorts={generatedShorts}
-        isProcessing={isProcessingShorts}
-        error={shortsError}
-        onReviewGeneratedShort={handleReviewFromGenerator}
       />
 
       <ShortsReviewModal
