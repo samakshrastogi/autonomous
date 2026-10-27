@@ -2,9 +2,13 @@ import React from 'react';
 import { FolderOpen } from 'lucide-react';
 
 export default function VideoCard({ file, onOpenFolder, formatFileSize }) {
+  const isShort = /#shorts|\bshorts\b/i.test(file.name);
+
   const cleanTitle = (name) => {
     if (!name) return 'Video';
-    return name.replace(/\.(mp4|mkv|webm)$/i, '');
+    return name
+      .replace(/\.f\d+(\.[a-z0-9]+)?$/i, '')
+      .replace(/\.(mp4|mkv|webm)$/i, '');
   };
 
   const formattedDate = new Date(file.mtime).toLocaleDateString(undefined, {
@@ -28,6 +32,11 @@ export default function VideoCard({ file, onOpenFolder, formatFileSize }) {
         >
           Your browser does not support the video tag.
         </video>
+        {isShort && (
+          <span className="shorts-tag">
+            Shorts
+          </span>
+        )}
       </div>
 
       {/* Video Information & Actions */}
@@ -37,9 +46,9 @@ export default function VideoCard({ file, onOpenFolder, formatFileSize }) {
         </h3>
 
         <div className="video-meta">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
             <span className="video-badge">{formatFileSize(file.size)}</span>
-            <span style={{ fontSize: '0.75rem' }}>{formattedDate}</span>
+            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{formattedDate}</span>
           </div>
 
           <div className="video-actions">

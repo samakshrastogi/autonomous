@@ -1,5 +1,5 @@
 import React from 'react';
-import { Download, Clipboard, X, FolderOpen, Sparkles } from 'lucide-react';
+import { Download, Clipboard, X, Sparkles } from 'lucide-react';
 
 export default function DownloadForm({
   url,
@@ -8,28 +8,35 @@ export default function DownloadForm({
   onDownload,
   autoDownloadOnPaste,
   setAutoDownloadOnPaste,
-  onOpenFolder
+  cleanAndExtractUrl
 }) {
   const handleClipboardPaste = async () => {
     try {
       const text = await navigator.clipboard.readText();
       if (text) {
-        setUrl(text.trim());
-        if (autoDownloadOnPaste && !isDownloading) {
-          onDownload(text.trim());
+        const clean = cleanAndExtractUrl(text);
+        setUrl(clean);
+        if (clean && autoDownloadOnPaste && !isDownloading) {
+          onDownload(clean);
         }
       }
     } catch (err) {
-      // Fallback: focus input if clipboard API is restricted
       const inputEl = document.querySelector('.url-input');
       if (inputEl) inputEl.focus();
     }
   };
 
+  const handleInputChange = (e) => {
+    const raw = e.target.value;
+    setUrl(raw);
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (url.trim() && !isDownloading) {
-      onDownload(url.trim());
+    const clean = cleanAndExtractUrl(url);
+    if (clean && !isDownloading) {
+      setUrl(clean);
+      onDownload(clean);
     }
   };
 
@@ -42,7 +49,7 @@ export default function DownloadForm({
             className="url-input"
             placeholder="Paste YouTube or Shorts URL here..."
             value={url}
-            onChange={(e) => setUrl(e.target.value)}
+            onChange={handleInputChange}
             disabled={isDownloading}
             autoFocus
           />
@@ -95,16 +102,6 @@ export default function DownloadForm({
             Auto-download instantly when URL is pasted
           </span>
         </label>
-
-        <button
-          type="button"
-          onClick={onOpenFolder}
-          className="action-btn-subtle"
-          title="Open downloaded videos folder on your computer"
-        >
-          <FolderOpen size={15} color="#2563eb" />
-          <span>Open in Folder</span>
-        </button>
       </div>
     </div>
   );

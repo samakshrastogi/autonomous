@@ -37,6 +37,16 @@ export default function App() {
     }
   };
 
+  // Safely extract clean YouTube URL from any raw pasted text
+  const cleanAndExtractUrl = (text) => {
+    if (!text || typeof text !== 'string') return '';
+    const match = text.match(/(https?:\/\/(?:www\.)?(?:youtube\.com\/(?:watch\?v=|shorts\/|live\/)|youtu\.be\/)[a-zA-Z0-9_\-]+[^\s]*)/i);
+    if (match) {
+      return match[1].trim();
+    }
+    return text.trim();
+  };
+
   const isYouTubeUrl = (text) => {
     if (!text || typeof text !== 'string') return false;
     const clean = text.trim();
@@ -50,7 +60,7 @@ export default function App() {
   };
 
   const handleStartDownload = async (targetUrl = url) => {
-    const downloadTarget = (targetUrl || '').trim();
+    const downloadTarget = cleanAndExtractUrl(targetUrl);
     if (!downloadTarget) return;
 
     if (activeDownloadRef.current) return;
@@ -108,7 +118,7 @@ export default function App() {
           if (!eventData) continue;
 
           if (eventType === 'start') {
-            setStatusText('Connecting and fetching video info...');
+            setStatusText('Connecting...');
           } else if (eventType === 'title') {
             setVideoTitle(eventData.filename);
           } else if (eventType === 'status') {
@@ -120,7 +130,7 @@ export default function App() {
               eta: eventData.eta || '',
               size: eventData.size || ''
             });
-            setStatusText(`Downloading: ${eventData.percent.toFixed(1)}%`);
+            setStatusText('');
           } else if (eventType === 'complete') {
             setStatusType('success');
             setStatusText('Download completed successfully!');
@@ -128,6 +138,8 @@ export default function App() {
             if (eventData.filename) {
               setVideoTitle(eventData.filename);
             }
+            // Clear the input after download completes
+            setUrl('');
             fetchRecentFiles();
           } else if (eventType === 'error') {
             setStatusType('error');
@@ -145,12 +157,12 @@ export default function App() {
   };
 
   const handlePasteEvent = (e) => {
-    const pastedText = e.clipboardData?.getData('text');
-    if (pastedText && isYouTubeUrl(pastedText)) {
-      const cleanUrl = pastedText.trim();
+    const rawPasted = e.clipboardData?.getData('text');
+    if (rawPasted && isYouTubeUrl(rawPasted)) {
+      const cleanUrl = cleanAndExtractUrl(rawPasted);
       setUrl(cleanUrl);
       if (autoDownloadOnPaste && !isDownloading) {
-        setTimeout(() => handleStartDownload(cleanUrl), 100);
+        setTimeout(() => handleStartDownload(cleanUrl), 80);
       }
     }
   };
@@ -182,7 +194,7 @@ export default function App() {
         onDownload={handleStartDownload}
         autoDownloadOnPaste={autoDownloadOnPaste}
         setAutoDownloadOnPaste={setAutoDownloadOnPaste}
-        onOpenFolder={handleOpenFolder}
+        cleanAndExtractUrl={cleanAndExtractUrl}
       />
 
       <DownloadProgress

@@ -14,15 +14,20 @@ export default function DownloadProgress({
     return null;
   }
 
+  // Clean format codes like .f616, .f251 or raw extensions
   const cleanTitle = (name) => {
     if (!name) return '';
-    return name.replace(/\.(mp4|mkv|webm)$/i, '');
+    return name
+      .replace(/\.f\d+(\.[a-z0-9]+)?$/i, '')
+      .replace(/\.(mp4|mkv|webm|part|ytdl)$/i, '');
   };
+
+  const hasValidSize = downloadStats.size && downloadStats.size.trim() !== '~' && downloadStats.size.trim() !== '';
 
   return (
     <div className="card progress-card">
       <div className="progress-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
           {statusType === 'running' && (
             <span className="status-badge status-downloading">
               <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#2563eb' }}></span>
@@ -41,16 +46,22 @@ export default function DownloadProgress({
               Failed
             </span>
           )}
-          <span style={{ fontWeight: 600, fontSize: '0.95rem', color: '#0f172a' }}>{statusText}</span>
+
+          {/* Show phase message only if distinct from 'Downloading' */}
+          {statusText && !statusText.startsWith('Downloading') && (
+            <span style={{ fontSize: '0.9rem', color: '#475569', fontWeight: 500 }}>
+              {statusText}
+            </span>
+          )}
         </div>
 
-        <span style={{ fontSize: '1.15rem', fontWeight: 700, color: '#0f172a' }}>
-          {progress > 0 ? `${progress.toFixed(0)}%` : isDownloading ? '...' : ''}
+        <span style={{ fontSize: '1.2rem', fontWeight: 700, color: '#0f172a' }}>
+          {progress > 0 ? `${progress.toFixed(1)}%` : isDownloading ? '...' : ''}
         </span>
       </div>
 
       {videoTitle && (
-        <div style={{ fontSize: '0.9rem', color: '#475569', marginBottom: '0.5rem', fontWeight: 500 }}>
+        <div style={{ fontSize: '0.9rem', color: '#334155', marginBottom: '0.65rem', fontWeight: 600 }}>
           {cleanTitle(videoTitle)}
         </div>
       )}
@@ -63,7 +74,7 @@ export default function DownloadProgress({
       </div>
 
       <div className="progress-details">
-        {downloadStats.size && (
+        {hasValidSize && (
           <div>
             Size: <strong>{downloadStats.size}</strong>
           </div>
@@ -75,7 +86,7 @@ export default function DownloadProgress({
         )}
         {downloadStats.eta && (
           <div>
-            Time Left: <strong>{downloadStats.eta}</strong>
+            ETA: <strong>{downloadStats.eta}</strong>
           </div>
         )}
         {statusType === 'success' && (
