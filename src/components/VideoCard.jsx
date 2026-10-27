@@ -13,6 +13,7 @@ export default function VideoCard({ file, formatFileSize, onGenerateShorts }) {
       .replace(/\([a-zA-Z0-9_\-]{8,16}\)/g, '')
       .replace(/\.f\d+(\.[a-z0-9]+)?$/i, '')
       .replace(/\.(mp4|mkv|webm)$/i, '')
+      .replace(/#shorts/gi, '')
       .trim();
   };
 

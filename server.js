@@ -267,15 +267,15 @@ async function resolveGeminiModel(key) {
     if (data.models && Array.isArray(data.models)) {
       console.log('[Gemini] Found available models for this key:', data.models.map(m => m.name));
       const preferred = [
-        'gemini-2.0-flash',
-        'gemini-2.0-flash-exp',
-        'gemini-1.5-flash-latest',
-        'gemini-1.5-flash-002',
-        'gemini-1.5-flash-001',
-        'gemini-1.5-pro-latest',
-        'gemini-1.5-pro',
-        'gemini-1.5-flash',
-        'gemini-pro'
+        'gemini-3.5-flash',
+        'gemini-3.5-flash-lite',
+        'gemini-3.6-flash',
+        'gemini-3.8-flash',
+        'gemini-3.7-flash',
+        'gemini-flash-latest',
+        'gemini-pro-latest',
+        'gemini-2.5-flash',
+        'gemini-2.0-flash'
       ];
 
       for (const pref of preferred) {
@@ -387,16 +387,16 @@ STRICT REQUIREMENTS:
   }
 ]`;
 
-    // Try detected model, with automatic fallback list if 404 occurs
+    // Try detected model, with automatic fallback list
     const candidateModels = [
       detectedModel,
-      'gemini-1.5-flash-latest',
-      'gemini-2.0-flash',
-      'gemini-2.0-flash-exp',
-      'gemini-1.5-flash-002',
-      'gemini-1.5-flash-001',
-      'gemini-1.5-pro-latest',
-      'gemini-1.5-pro'
+      'gemini-3.5-flash',
+      'gemini-3.5-flash-lite',
+      'gemini-3.6-flash',
+      'gemini-3.8-flash',
+      'gemini-3.7-flash',
+      'gemini-flash-latest',
+      'gemini-pro-latest'
     ];
     const uniqueModels = [...new Set(candidateModels)];
 
@@ -464,8 +464,8 @@ STRICT REQUIREMENTS:
         title: moment.title
       });
 
-      // FFmpeg command to cut and create vertical 9:16 Short with blurred background
-      const ffmpegCmd = `ffmpeg -ss ${moment.start} -to ${moment.end} -i "${videoPath}" -vf "split[a][b];[a]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=15:5[bg];[b]scale=1080:-1[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2" -preset ultrafast -c:v libx264 -crf 23 -c:a aac -threads 0 -y "${outputShortPath}"`;
+      // FFmpeg command to cut and create vertical 9:16 Short with high-performance blurred background
+      const ffmpegCmd = `ffmpeg -ss ${moment.start} -to ${moment.end} -i "${videoPath}" -vf "split[a][b];[a]scale=180:320:force_original_aspect_ratio=increase,crop=180:320,boxblur=5:2,scale=1080:1920[bg];[b]scale=1080:-1[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2" -preset ultrafast -c:v libx264 -crf 23 -c:a aac -threads 0 -y "${outputShortPath}"`;
 
       await new Promise((resolve) => {
         exec(ffmpegCmd, (err) => {
