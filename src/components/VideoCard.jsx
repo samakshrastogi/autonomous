@@ -1,14 +1,37 @@
-import React from 'react';
-import { Sparkles } from 'lucide-react';
+import React, { useState } from 'react';
+import { Sparkles, CheckCircle2 } from 'lucide-react';
 
 export default function VideoCard({ file, formatFileSize, onGenerateShorts }) {
+  const [durationStr, setDurationStr] = useState('');
   const isShort = /#shorts|\bshorts\b/i.test(file.name);
 
+  // Clean title: remove format codes (.f616), raw video IDs [yNd4wg47-PY], and extensions
   const cleanTitle = (name) => {
     if (!name) return 'Video';
     return name
+      .replace(/\[[a-zA-Z0-9_\-]{8,16}\]/g, '')
+      .replace(/\([a-zA-Z0-9_\-]{8,16}\)/g, '')
       .replace(/\.f\d+(\.[a-z0-9]+)?$/i, '')
-      .replace(/\.(mp4|mkv|webm)$/i, '');
+      .replace(/\.(mp4|mkv|webm)$/i, '')
+      .trim();
+  };
+
+  const formatDuration = (seconds) => {
+    if (!seconds || isNaN(seconds)) return '';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    if (mins >= 60) {
+      const hrs = Math.floor(mins / 60);
+      const remMins = mins % 60;
+      return `${hrs}:${remMins < 10 ? '0' : ''}${remMins}:${secs < 10 ? '0' : ''}${secs}`;
+    }
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
+  const handleMetadata = (e) => {
+    if (e.target && e.target.duration) {
+      setDurationStr(formatDuration(e.target.duration));
+    }
   };
 
   const formattedDate = new Date(file.mtime).toLocaleDateString(undefined, {
@@ -29,12 +52,20 @@ export default function VideoCard({ file, formatFileSize, onGenerateShorts }) {
           preload="metadata"
           playsInline
           src={file.url}
+          onLoadedMetadata={handleMetadata}
         >
           Your browser does not support the video tag.
         </video>
+
         {isShort && (
           <span className="shorts-tag">
             Shorts
+          </span>
+        )}
+
+        {durationStr && (
+          <span className="video-duration-pill">
+            {durationStr}
           </span>
         )}
       </div>
@@ -52,7 +83,7 @@ export default function VideoCard({ file, formatFileSize, onGenerateShorts }) {
           </div>
 
           <div className="video-actions">
-            {!isShort && onGenerateShorts && (
+            {!isShort && onGenerateShorts ? (
               <button
                 type="button"
                 onClick={() => onGenerateShorts(file)}
@@ -62,6 +93,11 @@ export default function VideoCard({ file, formatFileSize, onGenerateShorts }) {
                 <Sparkles size={12} />
                 <span>Shorts</span>
               </button>
+            ) : (
+              <span className="short-ready-badge" title="Already in vertical Shorts format">
+                <CheckCircle2 size={11} color="#16a34a" />
+                <span>Ready</span>
+              </span>
             )}
           </div>
         </div>

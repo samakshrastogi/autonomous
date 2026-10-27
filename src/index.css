@@ -102,72 +102,85 @@ body {
   font-weight: 400;
 }
 
-/* Main Input Card */
-.card {
-  background: var(--bg-card);
-  border: 1px solid var(--border-light);
-  border-radius: 1rem;
-  padding: 1.25rem 1.4rem;
-  box-shadow: var(--shadow-sm);
+/* Omnibar Input Bar */
+.omnibar-container {
   margin-bottom: 1.25rem;
-}
-
-.card:hover {
-  border-color: #cbd5e1;
-}
-
-.input-container {
-  display: flex;
-  gap: 0.65rem;
-  align-items: center;
-}
-
-.url-input-wrapper {
-  position: relative;
-  flex: 1;
-  display: flex;
-  align-items: center;
-}
-
-.url-input {
   width: 100%;
+}
+
+.omnibar-form {
+  display: flex;
+  align-items: center;
   background: #ffffff;
   border: 1.5px solid var(--border-light);
-  border-radius: 0.75rem;
-  padding: 0.85rem 1.1rem;
-  padding-right: 2.75rem;
-  color: var(--text-primary);
-  font-size: 0.95rem;
-  outline: none;
+  border-radius: 0.85rem;
+  padding: 0.35rem 0.65rem 0.35rem 1rem;
+  box-shadow: var(--shadow-sm);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.02);
+  gap: 0.65rem;
 }
 
-.url-input:focus {
+.omnibar-form:focus-within {
   border-color: var(--yt-red);
   box-shadow: 0 0 0 3px var(--yt-red-glow);
 }
 
-.url-input::placeholder {
+.omnibar-icon {
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.omnibar-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  padding: 0.55rem 0;
+}
+
+.omnibar-input::placeholder {
   color: #94a3b8;
 }
 
-.clear-btn {
-  position: absolute;
-  right: 0.75rem;
+.omnibar-clear-btn {
   background: transparent;
   border: none;
   color: #94a3b8;
   cursor: pointer;
-  padding: 0.25rem;
+  padding: 0.3rem;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.clear-btn:hover {
+
+.omnibar-clear-btn:hover {
   color: #475569;
   background: #f1f5f9;
+}
+
+.omnibar-paste-btn {
+  background: #f8fafc;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: 0.6rem;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.omnibar-paste-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: var(--text-primary);
 }
 
 .btn-primary {
@@ -542,5 +555,54 @@ body {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 0.85rem;
+}
+
+.modal-close-btn {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  padding: 0.35rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.modal-close-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+/* Floating Duration Pill on Video Frames */
+.video-duration-pill {
+  position: absolute;
+  bottom: 0.5rem;
+  right: 0.5rem;
+  background: rgba(0, 0, 0, 0.82);
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.15rem 0.45rem;
+  border-radius: 0.3rem;
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  pointer-events: none;
+  z-index: 5;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+/* Ready badge for Shorts */
+.short-ready-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.35rem;
 }
 
