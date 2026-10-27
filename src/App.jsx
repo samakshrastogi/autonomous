@@ -18,6 +18,7 @@ export default function App() {
   const [videoTitle, setVideoTitle] = useState('');
   const [recentFiles, setRecentFiles] = useState([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
+  const [activeTab, setActiveTab] = useState('all'); // 'all' | 'downloads' | 'drafts' | 'ready'
 
   // Gemini API Key state
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
@@ -46,6 +47,14 @@ export default function App() {
 
   useEffect(() => {
     fetchRecentFiles();
+  }, []);
+
+  // Silent background auto-refresh every 5 seconds so any changes on disk reflect instantly
+  useEffect(() => {
+    const timer = setInterval(() => {
+      fetchRecentFiles(true);
+    }, 5000);
+    return () => clearInterval(timer);
   }, []);
 
   // Ensure only 1 video plays at a time across the entire application
@@ -107,13 +116,15 @@ export default function App() {
 
       await fetchRecentFiles();
       setIsReviewModalOpen(false);
+      // Auto-switch to Ready Shorts tab!
+      setActiveTab('ready');
     } finally {
       setIsBurningText(false);
     }
   };
 
-  const fetchRecentFiles = async () => {
-    setLoadingFiles(true);
+  const fetchRecentFiles = async (silent = false) => {
+    if (!silent) setLoadingFiles(true);
     try {
       const res = await fetch('/api/files');
       const data = await res.json();
@@ -123,7 +134,7 @@ export default function App() {
     } catch (err) {
       console.error('Error fetching videos:', err);
     } finally {
-      setLoadingFiles(false);
+      if (!silent) setLoadingFiles(false);
     }
   };
 
@@ -222,13 +233,15 @@ export default function App() {
             setStatusText('');
           } else if (eventType === 'complete') {
             setStatusType('success');
-            setStatusText('Download completed successfully!');
+            setStatusText('Saved to 01_Downloads');
             setProgress(100);
             if (eventData.filename) {
               setVideoTitle(eventData.filename);
             }
             setUrl('');
             fetchRecentFiles();
+            // Automatically switch active tab in library to downloads!
+            setActiveTab('downloads');
           } else if (eventType === 'error') {
             setStatusType('error');
             setStatusText(eventData.message || 'Download failed');
@@ -329,6 +342,8 @@ export default function App() {
             setShortsStatus(eventData.message);
             setGeneratedShorts(eventData.shorts || []);
             fetchRecentFiles();
+            // Automatically switch active tab in library to Waiting for Text drafts!
+            setActiveTab('drafts');
           } else if (eventType === 'error') {
             setShortsError(eventData.message);
           }
@@ -383,6 +398,8 @@ export default function App() {
         formatFileSize={formatFileSize}
         onGenerateShorts={handleGenerateShorts}
         onReviewShort={handleOpenReviewModal}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
       />
 
       {/* Gemini API Key Modal */}

@@ -8,9 +8,13 @@ export default function VideoGallery({
   onRefresh,
   formatFileSize,
   onGenerateShorts,
-  onReviewShort
+  onReviewShort,
+  activeTab = 'all',
+  setActiveTab
 }) {
-  const [activeTab, setActiveTab] = useState('all'); // 'all' | 'downloads' | 'drafts' | 'ready'
+  const [localTab, setLocalTab] = useState('all');
+  const currentTab = setActiveTab ? activeTab : localTab;
+  const handleTabChange = setActiveTab || setLocalTab;
 
   // Compute category counts
   const downloadsCount = files.filter((f) => f.category === 'downloads').length;
@@ -19,9 +23,9 @@ export default function VideoGallery({
   const allCount = files.length;
 
   // Filter files based on selected tab
-  const filteredFiles = activeTab === 'all'
+  const filteredFiles = currentTab === 'all'
     ? files
-    : files.filter((f) => f.category === activeTab);
+    : files.filter((f) => f.category === currentTab);
 
   return (
     <div>
@@ -54,8 +58,8 @@ export default function VideoGallery({
         <div className="gallery-tabs-bar">
           <button
             type="button"
-            className={`gallery-tab-btn ${activeTab === 'all' ? 'active' : ''}`}
-            onClick={() => setActiveTab('all')}
+            className={`gallery-tab-btn ${currentTab === 'all' ? 'active' : ''}`}
+            onClick={() => handleTabChange('all')}
           >
             <Layers size={15} />
             <span>All Videos</span>
@@ -64,8 +68,8 @@ export default function VideoGallery({
 
           <button
             type="button"
-            className={`gallery-tab-btn ${activeTab === 'downloads' ? 'active' : ''}`}
-            onClick={() => setActiveTab('downloads')}
+            className={`gallery-tab-btn ${currentTab === 'downloads' ? 'active' : ''}`}
+            onClick={() => handleTabChange('downloads')}
             title="Full length YouTube downloads in 01_Downloads"
           >
             <Download size={15} />
@@ -75,8 +79,8 @@ export default function VideoGallery({
 
           <button
             type="button"
-            className={`gallery-tab-btn ${activeTab === 'drafts' ? 'active' : ''}`}
-            onClick={() => setActiveTab('drafts')}
+            className={`gallery-tab-btn ${currentTab === 'drafts' ? 'active' : ''}`}
+            onClick={() => handleTabChange('drafts')}
             title="9:16 Shorts waiting for custom text in 02_Shorts_Drafts"
           >
             <Clock size={15} />
@@ -88,8 +92,8 @@ export default function VideoGallery({
 
           <button
             type="button"
-            className={`gallery-tab-btn ${activeTab === 'ready' ? 'active' : ''}`}
-            onClick={() => setActiveTab('ready')}
+            className={`gallery-tab-btn ${currentTab === 'ready' ? 'active' : ''}`}
+            onClick={() => handleTabChange('ready')}
             title="Completed branded Shorts in 03_Shorts_Ready"
           >
             <CheckCircle2 size={15} />
@@ -102,17 +106,17 @@ export default function VideoGallery({
 
         {/* Subfolder location hint */}
         <div className="gallery-folder-hint">
-          {activeTab === 'all' && '📁 Showing all items across 01_Downloads, 02_Shorts_Drafts & 03_Shorts_Ready'}
-          {activeTab === 'downloads' && '📁 Folder: C:\\Users\\Samaksh Rastogi\\downloads\\videos\\01_Downloads'}
-          {activeTab === 'drafts' && '📁 Folder: C:\\Users\\Samaksh Rastogi\\downloads\\videos\\02_Shorts_Drafts'}
-          {activeTab === 'ready' && '📁 Folder: C:\\Users\\Samaksh Rastogi\\downloads\\videos\\03_Shorts_Ready'}
+          {currentTab === 'all' && '📁 Showing all items across 01_Downloads, 02_Shorts_Drafts & 03_Shorts_Ready'}
+          {currentTab === 'downloads' && '📁 Folder: C:\\Users\\Samaksh Rastogi\\downloads\\videos\\01_Downloads'}
+          {currentTab === 'drafts' && '📁 Folder: C:\\Users\\Samaksh Rastogi\\downloads\\videos\\02_Shorts_Drafts'}
+          {currentTab === 'ready' && '📁 Folder: C:\\Users\\Samaksh Rastogi\\downloads\\videos\\03_Shorts_Ready'}
         </div>
       </div>
 
       {/* Video Grid or Tab-Specific Empty State */}
       {filteredFiles.length === 0 ? (
         <div className="empty-state">
-          {activeTab === 'drafts' ? (
+          {currentTab === 'drafts' ? (
             <>
               <CheckCircle2 size={36} color="#16a34a" style={{ margin: '0 auto 0.5rem' }} />
               <h3 style={{ fontSize: '1.05rem', fontWeight: 600, color: '#166534', marginBottom: '0.35rem' }}>
@@ -122,7 +126,7 @@ export default function VideoGallery({
                 No drafts waiting. All your generated shorts have hooks and are in Ready Shorts.
               </p>
             </>
-          ) : activeTab === 'ready' ? (
+          ) : currentTab === 'ready' ? (
             <>
               <Clock size={36} color="#f59e0b" style={{ margin: '0 auto 0.5rem' }} />
               <h3 style={{ fontSize: '1.05rem', fontWeight: 600, color: '#b45309', marginBottom: '0.35rem' }}>
@@ -132,7 +136,7 @@ export default function VideoGallery({
                 Go to "Waiting for Text" and click "Add Text" on any short to burn your viral hook.
               </p>
             </>
-          ) : activeTab === 'downloads' ? (
+          ) : currentTab === 'downloads' ? (
             <>
               <Download size={36} color="#2563eb" style={{ margin: '0 auto 0.5rem' }} />
               <h3 style={{ fontSize: '1.05rem', fontWeight: 600, color: '#1e40af', marginBottom: '0.35rem' }}>
