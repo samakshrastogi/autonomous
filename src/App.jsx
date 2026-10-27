@@ -1,13 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Download, Clock, CheckCircle2, Sparkles } from 'lucide-react';
 import Header from './components/Header.jsx';
 import DownloadForm from './components/DownloadForm.jsx';
 import DownloadProgress from './components/DownloadProgress.jsx';
 import VideoGallery from './components/VideoGallery.jsx';
-import ApiKeyModal from './components/ApiKeyModal.jsx';
 import ShortsGeneratorSidebar from './components/ShortsGeneratorSidebar.jsx';
-import ChannelHandleModal from './components/ChannelHandleModal.jsx';
-import ShortsReviewModal from './components/ShortsReviewModal.jsx';
+
+// Dynamic code splitting: lazy-load modals on demand for faster initial page load
+const ApiKeyModal = lazy(() => import('./components/ApiKeyModal.jsx'));
+const ChannelHandleModal = lazy(() => import('./components/ChannelHandleModal.jsx'));
+const ShortsReviewModal = lazy(() => import('./components/ShortsReviewModal.jsx'));
 
 export default function App() {
   const [url, setUrl] = useState('');
@@ -35,8 +37,7 @@ export default function App() {
   const [reviewInitialHook, setReviewInitialHook] = useState('');
   const [isBurningText, setIsBurningText] = useState(false);
 
-  // Shorts Generation modal state
-  const [isShortsModalOpen, setIsShortsModalOpen] = useState(false);
+  // Shorts Generation state
   const [selectedVideoForShorts, setSelectedVideoForShorts] = useState(null);
   const [shortsStatus, setShortsStatus] = useState('');
   const [discoveredMoments, setDiscoveredMoments] = useState([]);
@@ -46,16 +47,43 @@ export default function App() {
 
   const activeDownloadRef = useRef(false);
 
+  // Initial load
   useEffect(() => {
     fetchRecentFiles();
   }, []);
 
-  // Silent background auto-refresh every 5 seconds so any changes on disk reflect instantly
+  // Real-Time Disk Events: Listen to server-sent file change broadcasts
   useEffect(() => {
-    const timer = setInterval(() => {
-      fetchRecentFiles(true);
-    }, 5000);
-    return () => clearInterval(timer);
+    let eventSource = null;
+    let reconnectTimeout = null;
+
+    const connectEvents = () => {
+      eventSource = new EventSource('/api/events');
+
+      eventSource.addEventListener('files_updated', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data && Array.isArray(data.files)) {
+            setRecentFiles(data.files);
+            setLoadingFiles(false);
+          }
+        } catch (err) {
+          console.warn('[SSE] Failed to parse files_updated event:', err);
+        }
+      });
+
+      eventSource.onerror = () => {
+        if (eventSource) eventSource.close();
+        reconnectTimeout = setTimeout(connectEvents, 3000);
+      };
+    };
+
+    connectEvents();
+
+    return () => {
+      if (eventSource) eventSource.close();
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+    };
   }, []);
 
   // Ensure only 1 video plays at a time across the entire application
@@ -370,6 +398,8 @@ export default function App() {
     if (!window.confirm(`Delete "${file.name}"?`)) {
       return;
     }
+    // Optimistic UI update: instantly remove from state
+    setRecentFiles((prev) => prev.filter((f) => f.name !== file.name));
     try {
       const res = await fetch('/api/delete', {
         method: 'POST',
@@ -378,9 +408,9 @@ export default function App() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to delete file');
-      await fetchRecentFiles();
     } catch (err) {
       alert(`Error deleting video: ${err.message}`);
+      fetchRecentFiles(); // Rollback if server fails
     }
   };
 
@@ -471,31 +501,39 @@ export default function App() {
         </main>
       </div>
 
-      {/* Modals */}
-      <ApiKeyModal
-        isOpen={isApiKeyModalOpen}
-        onClose={() => setIsApiKeyModalOpen(false)}
-        apiKey={apiKey}
-        onSaveApiKey={handleSaveApiKey}
-      />
+      {/* Modals with Suspense for on-demand lazy loading */}
+      <Suspense fallback={null}>
+        {isApiKeyModalOpen && (
+          <ApiKeyModal
+            isOpen={isApiKeyModalOpen}
+            onClose={() => setIsApiKeyModalOpen(false)}
+            apiKey={apiKey}
+            onSaveApiKey={handleSaveApiKey}
+          />
+        )}
 
-      <ChannelHandleModal
-        isOpen={isChannelModalOpen}
-        onClose={() => setIsChannelModalOpen(false)}
-        channelHandle={channelHandle}
-        onSaveHandle={handleSaveChannelHandle}
-      />
+        {isChannelModalOpen && (
+          <ChannelHandleModal
+            isOpen={isChannelModalOpen}
+            onClose={() => setIsChannelModalOpen(false)}
+            channelHandle={channelHandle}
+            onSaveHandle={handleSaveChannelHandle}
+          />
+        )}
 
-      <ShortsReviewModal
-        isOpen={isReviewModalOpen}
-        onClose={() => setIsReviewModalOpen(false)}
-        shortFile={selectedShortForReview}
-        initialHook={reviewInitialHook}
-        channelHandle={channelHandle}
-        onBurnText={handleBurnText}
-        isProcessing={isBurningText}
-        apiKey={apiKey}
-      />
+        {isReviewModalOpen && selectedShortForReview && (
+          <ShortsReviewModal
+            isOpen={isReviewModalOpen}
+            onClose={() => setIsReviewModalOpen(false)}
+            shortFile={selectedShortForReview}
+            initialHook={reviewInitialHook}
+            channelHandle={channelHandle}
+            onBurnText={handleBurnText}
+            isProcessing={isBurningText}
+            apiKey={apiKey}
+          />
+        )}
+      </Suspense>
     </div>
   );
 }
