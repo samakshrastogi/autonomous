@@ -48,34 +48,44 @@ export default function VideoGallery({
 
   return (
     <div className="gallery-section">
-      {/* Gallery View Header: Category Title Badge, Count, Search & Sort */}
+      {/* Gallery Header Row: 3-Way Segmented Category Toggle (Right Side) + Search & Sort */}
       <div className="gallery-header-row">
-        <div className="gallery-title-group">
-          <div className="gallery-title">
-            <span className={`gallery-view-badge view-${currentTab}`}>
-              {currentTab === 'downloads' && (
-                <>
-                  <Download size={15} />
-                  <span>Downloads</span>
-                </>
-              )}
-              {currentTab === 'drafts' && (
-                <>
-                  <Clock size={15} />
-                  <span>Pre Ready Shorts</span>
-                </>
-              )}
-              {currentTab === 'ready' && (
-                <>
-                  <CheckCircle2 size={15} />
-                  <span>Shorts</span>
-                </>
-              )}
-              <span className="gallery-total-badge">
-                {filteredAndSortedFiles.length}
-              </span>
+        <div className="gallery-toggle-group">
+          <button
+            type="button"
+            onClick={() => (setActiveTab ? setActiveTab('downloads') : setLocalTab('downloads'))}
+            className={`gallery-toggle-btn ${currentTab === 'downloads' ? 'active-dl' : ''}`}
+          >
+            <Download size={14} />
+            <span>Downloads</span>
+            <span className="toggle-count-badge count-dl">
+              {files.filter((f) => f.category === 'downloads').length}
             </span>
-          </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => (setActiveTab ? setActiveTab('drafts') : setLocalTab('drafts'))}
+            className={`gallery-toggle-btn ${currentTab === 'drafts' ? 'active-drafts' : ''}`}
+          >
+            <Clock size={14} />
+            <span>Pre Ready Shorts</span>
+            <span className="toggle-count-badge count-drafts">
+              {files.filter((f) => f.category === 'drafts').length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => (setActiveTab ? setActiveTab('ready') : setLocalTab('ready'))}
+            className={`gallery-toggle-btn ${currentTab === 'ready' ? 'active-ready' : ''}`}
+          >
+            <CheckCircle2 size={14} />
+            <span>Shorts</span>
+            <span className="toggle-count-badge count-ready">
+              {files.filter((f) => f.category === 'ready').length}
+            </span>
+          </button>
         </div>
 
         {/* Search & Sort Controls */}

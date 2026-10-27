@@ -426,57 +426,6 @@ export default function App() {
             />
           </div>
 
-          {/* Creator Navigation Menu */}
-          <div className="sidebar-nav-menu">
-            <button
-              type="button"
-              onClick={() => setActiveTab('downloads')}
-              className={`sidebar-nav-item ${activeTab === 'downloads' ? 'active-dl' : ''}`}
-            >
-              <div className="nav-item-left">
-                <div className="nav-icon-badge icon-dl">
-                  <Download size={14} />
-                </div>
-                <span className="nav-item-label">Downloads</span>
-              </div>
-              <span className="nav-item-count count-dl">
-                {recentFiles.filter((f) => f.category === 'downloads').length}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('drafts')}
-              className={`sidebar-nav-item ${activeTab === 'drafts' ? 'active-drafts' : ''}`}
-            >
-              <div className="nav-item-left">
-                <div className="nav-icon-badge icon-drafts">
-                  <Clock size={14} />
-                </div>
-                <span className="nav-item-label">Pre Ready Shorts</span>
-              </div>
-              <span className="nav-item-count count-drafts">
-                {recentFiles.filter((f) => f.category === 'drafts').length}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('ready')}
-              className={`sidebar-nav-item ${activeTab === 'ready' ? 'active-ready' : ''}`}
-            >
-              <div className="nav-item-left">
-                <div className="nav-icon-badge icon-ready">
-                  <CheckCircle2 size={14} />
-                </div>
-                <span className="nav-item-label">Shorts</span>
-              </div>
-              <span className="nav-item-count count-ready">
-                {recentFiles.filter((f) => f.category === 'ready').length}
-              </span>
-            </button>
-          </div>
-
           {/* Processing Area */}
           <div className="processing-section">
             <DownloadProgress
