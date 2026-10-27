@@ -1,12 +1,11 @@
 import React from 'react';
-import { Film, RotateCcw, FolderOpen } from 'lucide-react';
+import { Film, RotateCcw } from 'lucide-react';
 import VideoCard from './VideoCard.jsx';
 
 export default function VideoGallery({
   files,
   loading,
   onRefresh,
-  onOpenFolder,
   formatFileSize,
   onGenerateShorts
 }) {
@@ -39,15 +38,6 @@ export default function VideoGallery({
             <RotateCcw size={14} className={loading ? 'spin' : ''} />
             <span>Refresh</span>
           </button>
-          <button
-            type="button"
-            onClick={onOpenFolder}
-            className="action-btn-subtle"
-            title="Open folder in Windows Explorer"
-          >
-            <FolderOpen size={14} />
-            <span>Open in Folder</span>
-          </button>
         </div>
       </div>
 
@@ -67,7 +57,6 @@ export default function VideoGallery({
             <VideoCard
               key={`${file.name}-${idx}`}
               file={file}
-              onOpenFolder={onOpenFolder}
               formatFileSize={formatFileSize}
               onGenerateShorts={onGenerateShorts}
             />

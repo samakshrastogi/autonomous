@@ -1,7 +1,7 @@
 import React from 'react';
-import { FolderOpen, Sparkles } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 
-export default function VideoCard({ file, onOpenFolder, formatFileSize, onGenerateShorts }) {
+export default function VideoCard({ file, formatFileSize, onGenerateShorts }) {
   const isShort = /#shorts|\bshorts\b/i.test(file.name);
 
   const cleanTitle = (name) => {
@@ -63,16 +63,6 @@ export default function VideoCard({ file, onOpenFolder, formatFileSize, onGenera
                 <span>Shorts</span>
               </button>
             )}
-
-            <button
-              type="button"
-              onClick={onOpenFolder}
-              className="action-btn-subtle"
-              title="Show in Windows File Explorer"
-            >
-              <FolderOpen size={13} />
-              <span>Explorer</span>
-            </button>
           </div>
         </div>
       </div>

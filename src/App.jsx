@@ -14,7 +14,6 @@ export default function App() {
   const [statusText, setStatusText] = useState('Idle');
   const [statusType, setStatusType] = useState('idle'); // idle | running | success | error
   const [videoTitle, setVideoTitle] = useState('');
-  const [autoDownloadOnPaste, setAutoDownloadOnPaste] = useState(true);
   const [recentFiles, setRecentFiles] = useState([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
 
@@ -174,22 +173,15 @@ export default function App() {
     }
   };
 
+  // Automatically triggers download whenever a link is pasted into the window
   const handlePasteEvent = (e) => {
     const rawPasted = e.clipboardData?.getData('text');
     if (rawPasted && isYouTubeUrl(rawPasted)) {
       const cleanUrl = cleanAndExtractUrl(rawPasted);
       setUrl(cleanUrl);
-      if (autoDownloadOnPaste && !isDownloading) {
+      if (!isDownloading) {
         setTimeout(() => handleStartDownload(cleanUrl), 80);
       }
-    }
-  };
-
-  const handleOpenFolder = async () => {
-    try {
-      await fetch('/api/open-folder', { method: 'POST' });
-    } catch (err) {
-      console.error('Failed to open folder:', err);
     }
   };
 
@@ -297,9 +289,8 @@ export default function App() {
         setUrl={setUrl}
         isDownloading={isDownloading}
         onDownload={handleStartDownload}
-        autoDownloadOnPaste={autoDownloadOnPaste}
-        setAutoDownloadOnPaste={setAutoDownloadOnPaste}
         cleanAndExtractUrl={cleanAndExtractUrl}
+        isYouTubeUrl={isYouTubeUrl}
       />
 
       <DownloadProgress
@@ -309,14 +300,12 @@ export default function App() {
         isDownloading={isDownloading}
         videoTitle={videoTitle}
         downloadStats={downloadStats}
-        onOpenFolder={handleOpenFolder}
       />
 
       <VideoGallery
         files={recentFiles}
         loading={loadingFiles}
         onRefresh={fetchRecentFiles}
-        onOpenFolder={handleOpenFolder}
         formatFileSize={formatFileSize}
         onGenerateShorts={handleGenerateShorts}
       />

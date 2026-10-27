@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle2, AlertCircle, FolderOpen } from 'lucide-react';
+import { CheckCircle2, AlertCircle } from 'lucide-react';
 
 export default function DownloadProgress({
   statusType,
@@ -7,8 +7,7 @@ export default function DownloadProgress({
   progress,
   isDownloading,
   videoTitle,
-  downloadStats,
-  onOpenFolder
+  downloadStats
 }) {
   if (statusType === 'idle' && !isDownloading) {
     return null;
@@ -88,17 +87,6 @@ export default function DownloadProgress({
           <div>
             ETA: <strong>{downloadStats.eta}</strong>
           </div>
-        )}
-        {statusType === 'success' && (
-          <button
-            type="button"
-            onClick={onOpenFolder}
-            className="action-btn-subtle"
-            style={{ marginLeft: 'auto' }}
-          >
-            <FolderOpen size={14} color="#16a34a" />
-            <span>Show in Windows Explorer</span>
-          </button>
         )}
       </div>
     </div>

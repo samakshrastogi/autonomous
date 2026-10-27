@@ -1,14 +1,13 @@
 import React from 'react';
-import { Download, Clipboard, X, Sparkles } from 'lucide-react';
+import { Download, Clipboard, X } from 'lucide-react';
 
 export default function DownloadForm({
   url,
   setUrl,
   isDownloading,
   onDownload,
-  autoDownloadOnPaste,
-  setAutoDownloadOnPaste,
-  cleanAndExtractUrl
+  cleanAndExtractUrl,
+  isYouTubeUrl
 }) {
   const handleClipboardPaste = async () => {
     try {
@@ -16,7 +15,7 @@ export default function DownloadForm({
       if (text) {
         const clean = cleanAndExtractUrl(text);
         setUrl(clean);
-        if (clean && autoDownloadOnPaste && !isDownloading) {
+        if (clean && !isDownloading) {
           onDownload(clean);
         }
       }
@@ -29,6 +28,13 @@ export default function DownloadForm({
   const handleInputChange = (e) => {
     const raw = e.target.value;
     setUrl(raw);
+    // Auto-download as soon as a complete valid YouTube URL is entered
+    if (isYouTubeUrl && isYouTubeUrl(raw) && !isDownloading) {
+      const clean = cleanAndExtractUrl(raw);
+      if (clean) {
+        onDownload(clean);
+      }
+    }
   };
 
   const handleSubmit = (e) => {
@@ -86,23 +92,6 @@ export default function DownloadForm({
           <span>{isDownloading ? 'Downloading...' : 'Download'}</span>
         </button>
       </form>
-
-      <div className="controls-bar">
-        <label className="switch-label">
-          <label className="switch">
-            <input
-              type="checkbox"
-              checked={autoDownloadOnPaste}
-              onChange={(e) => setAutoDownloadOnPaste(e.target.checked)}
-            />
-            <span className="slider"></span>
-          </label>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
-            <Sparkles size={16} color="#ef4444" />
-            Auto-download instantly when URL is pasted
-          </span>
-        </label>
-      </div>
     </div>
   );
 }
