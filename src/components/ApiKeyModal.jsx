@@ -7,7 +7,7 @@ export default function ApiKeyModal({ isOpen, onClose, apiKey, onSaveApiKey }) {
   const [showPassword, setShowPassword] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
 
-  // Sync with prop when modal opens
+  // Sync state when modal opens
   useEffect(() => {
     if (isOpen) {
       setInputValue(apiKey || '');
@@ -16,6 +16,19 @@ export default function ApiKeyModal({ isOpen, onClose, apiKey, onSaveApiKey }) {
       setSavedSuccess(false);
     }
   }, [isOpen, apiKey]);
+
+  // Close on 'Escape' key press
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    if (isOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -30,7 +43,7 @@ export default function ApiKeyModal({ isOpen, onClose, apiKey, onSaveApiKey }) {
     setTimeout(() => {
       setSavedSuccess(false);
       onClose();
-    }, 600);
+    }, 500);
   };
 
   const handleEditClick = (e) => {
@@ -46,7 +59,6 @@ export default function ApiKeyModal({ isOpen, onClose, apiKey, onSaveApiKey }) {
     }
   };
 
-  // Mask string for display when saved (e.g. AIzaSyB...4f8x)
   const getMaskedKey = (key) => {
     if (!key) return '';
     if (key.length <= 10) return '••••••••••••';
@@ -54,8 +66,8 @@ export default function ApiKeyModal({ isOpen, onClose, apiKey, onSaveApiKey }) {
   };
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-content">
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <Key size={18} color="#ef4444" />
@@ -67,13 +79,13 @@ export default function ApiKeyModal({ isOpen, onClose, apiKey, onSaveApiKey }) {
             type="button"
             onClick={onClose}
             className="modal-close-btn"
-            title="Close modal"
+            title="Close (Esc)"
           >
             <X size={18} />
           </button>
         </div>
 
-        <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '1rem', lineHeight: 1.4 }}>
+        <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '1rem', lineHeight: 1.45 }}>
           Enter your Google Gemini API key to analyze videos and automatically generate viral 9:16 Shorts with Hinglish titles.
         </p>
 
@@ -82,7 +94,7 @@ export default function ApiKeyModal({ isOpen, onClose, apiKey, onSaveApiKey }) {
           <div style={{
             background: '#f0fdf4',
             border: '1px solid #bbf7d0',
-            borderRadius: '0.5rem',
+            borderRadius: '0.55rem',
             padding: '0.5rem 0.75rem',
             marginBottom: '0.85rem',
             display: 'flex',
@@ -98,17 +110,11 @@ export default function ApiKeyModal({ isOpen, onClose, apiKey, onSaveApiKey }) {
         )}
 
         <form onSubmit={handleSave}>
-          <div style={{ position: 'relative', marginBottom: '1rem' }}>
+          {/* Integrated, perfectly aligned key input box */}
+          <div className="key-input-wrapper" style={{ marginBottom: '1.15rem' }}>
             <input
               type={showPassword ? 'text' : 'password'}
-              className="url-input"
-              style={{
-                fontFamily: 'monospace',
-                fontSize: '0.85rem',
-                paddingRight: '2.5rem',
-                background: isEditing ? '#ffffff' : '#f8fafc',
-                cursor: isEditing ? 'text' : 'default'
-              }}
+              className="key-input-field"
               placeholder="AIzaSy..."
               value={isEditing ? inputValue : getMaskedKey(inputValue)}
               onChange={handleInputChange}
@@ -118,8 +124,7 @@ export default function ApiKeyModal({ isOpen, onClose, apiKey, onSaveApiKey }) {
 
             <button
               type="button"
-              className="clear-btn"
-              style={{ right: '0.6rem' }}
+              className="key-eye-btn"
               title={showPassword ? 'Hide key' : 'Show key'}
               onClick={() => setShowPassword(!showPassword)}
             >
@@ -138,44 +143,44 @@ export default function ApiKeyModal({ isOpen, onClose, apiKey, onSaveApiKey }) {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '0.3rem',
-                textDecoration: 'none'
+                textDecoration: 'none',
+                fontWeight: 500
               }}
             >
               <span>Get Free Gemini Key</span>
               <ExternalLink size={12} />
             </a>
 
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
               <button
                 type="button"
                 onClick={onClose}
                 className="action-btn-subtle"
-                style={{ padding: '0.5rem 0.9rem' }}
+                style={{ padding: '0.45rem 0.85rem', fontSize: '0.825rem' }}
               >
                 Cancel
               </button>
 
-              {/* Requirement: if key is saved, show Edit/Change button. When user edits, show Save button! */}
               {!isEditing && apiKey ? (
                 <button
                   type="button"
                   onClick={handleEditClick}
                   className="btn-secondary"
-                  style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+                  style={{ padding: '0.45rem 0.95rem', fontSize: '0.825rem', gap: '0.4rem' }}
                 >
-                  <Edit3 size={14} />
+                  <Edit3 size={13} />
                   <span>Edit Key</span>
                 </button>
               ) : (
                 <button
                   type="submit"
                   className="btn-primary"
-                  style={{ padding: '0.5rem 1.15rem', fontSize: '0.85rem' }}
+                  style={{ padding: '0.45rem 1.15rem', fontSize: '0.825rem' }}
                   disabled={!inputValue.trim()}
                 >
                   {savedSuccess ? (
                     <>
-                      <Check size={16} />
+                      <Check size={15} />
                       <span>Saved!</span>
                     </>
                   ) : (

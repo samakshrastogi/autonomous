@@ -575,6 +575,50 @@ body {
   color: #0f172a;
 }
 
+/* Key Input in Modal */
+.key-input-wrapper {
+  display: flex;
+  align-items: center;
+  background: #ffffff;
+  border: 1.5px solid var(--border-light);
+  border-radius: 0.75rem;
+  padding: 0 0.75rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.key-input-wrapper:focus-within {
+  border-color: var(--yt-red);
+  box-shadow: 0 0 0 3px var(--yt-red-glow);
+}
+
+.key-input-field {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  font-size: 0.85rem;
+  padding: 0.75rem 0;
+  color: var(--text-primary);
+}
+
+.key-eye-btn {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  padding: 0.3rem;
+  border-radius: 0.35rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease;
+}
+
+.key-eye-btn:hover {
+  color: #0f172a;
+}
+
 /* Floating Duration Pill on Video Frames */
 .video-duration-pill {
   position: absolute;
