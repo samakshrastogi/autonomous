@@ -1,5 +1,5 @@
 import React from 'react';
-import { FolderOpen, Download } from 'lucide-react';
+import { FolderOpen } from 'lucide-react';
 
 export default function VideoCard({ file, onOpenFolder, formatFileSize }) {
   const cleanTitle = (name) => {
@@ -16,11 +16,12 @@ export default function VideoCard({ file, onOpenFolder, formatFileSize }) {
 
   return (
     <div className="video-card">
-      {/* Framed Video Player */}
+      {/* Framed Video Player without download control */}
       <div className="video-frame-container">
         <video
           className="video-player"
           controls
+          controlsList="nodownload"
           preload="metadata"
           playsInline
           src={file.url}
@@ -42,16 +43,6 @@ export default function VideoCard({ file, onOpenFolder, formatFileSize }) {
           </div>
 
           <div className="video-actions">
-            <a
-              href={file.url}
-              download={file.name}
-              className="action-btn-subtle"
-              title="Save copy to your computer"
-            >
-              <Download size={13} />
-              <span>Save</span>
-            </a>
-
             <button
               type="button"
               onClick={onOpenFolder}
