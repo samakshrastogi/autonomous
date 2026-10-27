@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle2, AlertCircle, Download, Check, Sparkles, HardDrive } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Download, Check } from 'lucide-react';
 
 export default function DownloadProgress({
   statusType,
@@ -13,14 +13,16 @@ export default function DownloadProgress({
     return null;
   }
 
-  // Clean title: remove format codes (.f616), raw video IDs [yNd4wg47-PY], and extensions
+  // Clean title: remove "Short - ", IDs, format codes, and extensions
   const cleanTitle = (name) => {
     if (!name) return 'Video';
     return name
+      .replace(/^Short\s*[-–—:]\s*/i, '')
       .replace(/\[[a-zA-Z0-9_\-]{8,16}\]/g, '')
       .replace(/\([a-zA-Z0-9_\-]{8,16}\)/g, '')
       .replace(/\.f\d+(\.[a-z0-9]+)?$/i, '')
       .replace(/\.(mp4|mkv|webm|part|ytdl)$/i, '')
+      .replace(/#shorts/gi, '')
       .trim();
   };
 
@@ -42,11 +44,10 @@ export default function DownloadProgress({
   const hasValidSize = downloadStats.size && downloadStats.size.trim() !== '~' && downloadStats.size.trim() !== '';
 
   return (
-    <div className="card progress-card" style={{ marginBottom: '1.5rem', border: isSuccess ? '1px solid #bbf7d0' : isError ? '1px solid #fecaca' : '1px solid #e2e8f0' }}>
-      {/* User-Perspective Step Timeline */}
+    <div className="card progress-card" style={{ marginBottom: '1.25rem', border: isSuccess ? '1px solid #bbf7d0' : isError ? '1px solid #fecaca' : '1px solid #e2e8f0' }}>
+      {/* 3-Step Timeline */}
       {!isError && (
         <div className="download-stepper-bar">
-          {/* Step 1 */}
           <div className={`stepper-node ${currentStep > 1 || isSuccess ? 'completed' : currentStep === 1 ? 'active' : ''}`}>
             <div className="stepper-circle">
               {currentStep > 1 || isSuccess ? <Check size={12} /> : '1'}
@@ -56,7 +57,6 @@ export default function DownloadProgress({
 
           <div className={`stepper-line ${currentStep >= 2 || isSuccess ? 'completed' : ''}`} />
 
-          {/* Step 2 */}
           <div className={`stepper-node ${currentStep > 2 || isSuccess ? 'completed' : currentStep === 2 ? 'active' : ''}`}>
             <div className="stepper-circle">
               {currentStep > 2 || isSuccess ? <Check size={12} /> : '2'}
@@ -66,7 +66,6 @@ export default function DownloadProgress({
 
           <div className={`stepper-line ${currentStep >= 3 || isSuccess ? 'completed' : ''}`} />
 
-          {/* Step 3 */}
           <div className={`stepper-node ${isSuccess ? 'completed' : currentStep === 3 ? 'active' : ''}`}>
             <div className="stepper-circle">
               {isSuccess ? <Check size={12} /> : '3'}
@@ -77,55 +76,55 @@ export default function DownloadProgress({
       )}
 
       {/* Header Info */}
-      <div className="progress-header" style={{ marginTop: isError ? '0' : '0.75rem', marginBottom: '0.45rem' }}>
+      <div className="progress-header" style={{ marginTop: isError ? '0' : '0.5rem', marginBottom: '0.45rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
           {isDownloading && (
             <span className="status-badge status-downloading">
               <span className="pulse-dot"></span>
-              {currentStep === 1 ? 'Connecting to YouTube...' : currentStep === 3 ? 'Finalizing HD Video...' : 'Downloading Video...'}
+              {currentStep === 1 ? 'Connecting...' : currentStep === 3 ? 'Finalizing...' : 'Downloading...'}
             </span>
           )}
           {isSuccess && (
             <span className="status-badge status-success">
-              <CheckCircle2 size={15} />
-              Downloaded to 01_Downloads
+              <CheckCircle2 size={14} />
+              Downloaded
             </span>
           )}
           {isError && (
             <span className="status-badge status-error">
-              <AlertCircle size={15} />
-              Download Failed
+              <AlertCircle size={14} />
+              Failed
             </span>
           )}
         </div>
 
         {!isError && (
-          <span style={{ fontSize: '1.15rem', fontWeight: 700, color: '#0f172a' }}>
+          <span style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a' }}>
             {isSuccess ? '100%' : progress > 0 ? `${progress.toFixed(0)}%` : '...'}
           </span>
         )}
       </div>
 
-      {/* Clean Consumer Title */}
+      {/* Clean Video Title */}
       {videoTitle && (
-        <div style={{ fontSize: '0.925rem', color: '#1e293b', marginBottom: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-          <Download size={15} color="#2563eb" style={{ flexShrink: 0 }} />
+        <div style={{ fontSize: '0.875rem', color: '#1e293b', marginBottom: '0.65rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+          <Download size={14} color="#2563eb" style={{ flexShrink: 0 }} />
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {cleanTitle(videoTitle)}
           </span>
         </div>
       )}
 
-      {/* Error Message in Consumer English */}
+      {/* Error Message */}
       {isError && (
-        <div style={{ background: '#fef2f2', border: '1px solid #fecaca', padding: '0.75rem 0.85rem', borderRadius: '0.55rem', color: '#b91c1c', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
-          Unable to download this video. Please verify that the YouTube link is public and your internet connection is active.
+        <div style={{ background: '#fef2f2', border: '1px solid #fecaca', padding: '0.65rem 0.75rem', borderRadius: '0.55rem', color: '#b91c1c', fontSize: '0.825rem', marginBottom: '0.5rem' }}>
+          Download failed. Please check the link and connection.
         </div>
       )}
 
-      {/* Smooth Progress Track */}
+      {/* Progress Track */}
       {!isError && (
-        <div className="progress-track" style={{ height: '0.65rem', margin: '0.4rem 0 0.75rem' }}>
+        <div className="progress-track" style={{ height: '0.6rem', margin: '0.35rem 0 0.65rem' }}>
           <div
             className={`progress-fill ${isDownloading && progress === 0 ? 'progress-indeterminate' : ''}`}
             style={{ width: `${isSuccess ? 100 : progress}%` }}
@@ -135,7 +134,7 @@ export default function DownloadProgress({
 
       {/* User-Facing Metrics */}
       {!isError && isDownloading && (
-        <div className="progress-details" style={{ fontSize: '0.8rem', color: '#64748b' }}>
+        <div className="progress-details" style={{ fontSize: '0.78rem', color: '#64748b' }}>
           {hasValidSize && (
             <div>
               Size: <strong style={{ color: '#0f172a' }}>{downloadStats.size}</strong>
@@ -148,7 +147,7 @@ export default function DownloadProgress({
           )}
           {downloadStats.eta && (
             <div>
-              Time Remaining: <strong style={{ color: '#0f172a' }}>{downloadStats.eta}</strong>
+              ETA: <strong style={{ color: '#0f172a' }}>{downloadStats.eta}</strong>
             </div>
           )}
         </div>

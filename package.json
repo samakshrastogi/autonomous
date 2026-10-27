@@ -1,7 +1,7 @@
 {
-  "name": "youtube-quick-downloader",
+  "name": "shorts-studio",
   "version": "1.0.0",
-  "description": "Simple YouTube video downloader using yt-dlp and React",
+  "description": "Shorts Studio downloader and AI clip creator",
   "main": "server.js",
   "type": "module",
   "scripts": {
@@ -10,8 +10,7 @@
     "start": "node server.js"
   },
   "keywords": [
-    "youtube",
-    "yt-dlp",
+    "shorts",
     "downloader",
     "react"
   ],

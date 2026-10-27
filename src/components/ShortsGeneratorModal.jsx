@@ -37,10 +37,12 @@ export default function ShortsGeneratorModal({
   const cleanTitle = (name) => {
     if (!name) return 'Video';
     return name
+      .replace(/^Short\s*[-–—:]\s*/i, '')
       .replace(/\[[a-zA-Z0-9_\-]{8,16}\]/g, '')
       .replace(/\([a-zA-Z0-9_\-]{8,16}\)/g, '')
       .replace(/\.f\d+(\.[a-z0-9]+)?$/i, '')
       .replace(/\.(mp4|mkv|webm)$/i, '')
+      .replace(/#shorts/gi, '')
       .trim();
   };
 

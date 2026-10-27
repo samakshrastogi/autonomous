@@ -145,9 +145,9 @@ app.get('/api/files', (req, res) => {
   const allFiles = [];
 
   const subfoldersConfig = [
-    { dir: FOLDERS.SHORTS_READY, category: 'ready', label: 'Ready to Post', subfolder: '03_Shorts_Ready' },
-    { dir: FOLDERS.SHORTS_DRAFTS, category: 'drafts', label: 'Needs Text', subfolder: '02_Shorts_Drafts' },
-    { dir: FOLDERS.DOWNLOADS, category: 'downloads', label: 'Original Video', subfolder: '01_Downloads' }
+    { dir: FOLDERS.SHORTS_READY, category: 'ready', label: 'Shorts', subfolder: '03_Shorts_Ready' },
+    { dir: FOLDERS.SHORTS_DRAFTS, category: 'drafts', label: 'Pre Ready Shorts', subfolder: '02_Shorts_Drafts' },
+    { dir: FOLDERS.DOWNLOADS, category: 'downloads', label: 'Downloads', subfolder: '01_Downloads' }
   ];
 
   for (const config of subfoldersConfig) {
@@ -264,7 +264,7 @@ app.post('/api/download', (req, res) => {
   const targetDir = outputDir || FOLDERS.DOWNLOADS;
 
   if (!url || typeof url !== 'string' || !url.trim()) {
-    return res.status(400).json({ error: 'Please provide a valid YouTube URL.' });
+    return res.status(400).json({ error: 'Please provide a valid video link.' });
   }
 
   // Ensure download folder exists
@@ -536,16 +536,18 @@ app.post('/api/generate-shorts', async (req, res) => {
     const detectedModel = await resolveGeminiModel(key.trim());
 
     const prompt = `Analyze this video audio carefully.
-Find 3 to 5 of the most engaging, hilarious, high-energy, or dramatic viral moments suitable for YouTube Shorts (duration between 20 to 55 seconds each).
+Find ALL genuinely viral, funny, punchy, dramatic, or climax moments suitable for vertical video clips (duration between 15 to 58 seconds each).
+DO NOT limit to a fixed number: detect as many moments as genuinely exist in the video that have strong viral potential. If there are 2, return 2; if there are 5, return 5; if there are 8, return 8. Only return genuine, high-retention moments without filler.
 
 STRICT REQUIREMENTS:
-1. Every title MUST be in conversational Hinglish (Hindi written in English alphabets). Examples: "Nischay ka epic reaction jab sab shocked ho gaye", "Yeh twist dekh ke sabki hasi chhoot gayi", "Bhai ne yeh kya bol diya".
-2. Hook must be in Hinglish (e.g. "Wait for the end twist...", "Dhyan se dekho kya hua...").
-3. Timestamps MUST be in format "HH:MM:SS" or "MM:SS" (e.g. "00:01:23").
-4. Return ONLY a JSON array of objects with the exact schema:
+1. Every title MUST be in conversational Hinglish (Hindi written in English alphabets, e.g. "Jethalal ki phir phasi kismat", "Bhai ne yeh kya bol diya", "Reaction dekh ke hasi nahi rukegi").
+2. DO NOT include the word "Short" or "Shorts" in any title.
+3. Hook must be in Hinglish (e.g. "Wait for the end twist...", "Dhyan se dekho kya hua...").
+4. Timestamps MUST be in format "HH:MM:SS" or "MM:SS" (e.g. "00:01:23").
+5. Return ONLY a JSON array of objects with the exact schema:
 [
   {
-    "title": "Hinglish title (under 50 chars, without hashtags)",
+    "title": "Hinglish title without the word Short (under 50 chars)",
     "hook": "Hinglish hook",
     "start": "00:01:23",
     "end": "00:01:55"
@@ -617,16 +619,21 @@ STRICT REQUIREMENTS:
     const generatedFiles = [];
     for (let i = 0; i < moments.length; i++) {
       const moment = moments[i];
-      const safeTitle = moment.title.replace(/[\\/:*?"<>|]/g, '').trim();
-      const shortFilename = `Short - ${safeTitle} #shorts.mp4`;
+      const cleanSafeTitle = (moment.title || `Clip_${i + 1}`)
+        .replace(/^Short\s*[-–—:]\s*/i, '')
+        .replace(/[\\/:*?"<>|]/g, '')
+        .replace(/#shorts/gi, '')
+        .replace(/\bshorts\b/gi, '')
+        .trim();
+      const shortFilename = `${cleanSafeTitle || `Clip_${i + 1}`}.mp4`;
       const outputShortPath = path.join(FOLDERS.SHORTS_DRAFTS, shortFilename);
 
       sendEvent('status', {
         phase: 'rendering',
-        message: `Rendering Short ${i + 1}/${moments.length}: "${moment.title}" (9:16 frame)...`,
+        message: `Rendering clip ${i + 1}/${moments.length}: "${cleanSafeTitle}" (9:16)...`,
         current: i + 1,
         total: moments.length,
-        title: moment.title
+        title: cleanSafeTitle
       });
 
       // Build dynamic filter: 9:16 blurred frame + optional hook & channel handle text
@@ -646,15 +653,15 @@ STRICT REQUIREMENTS:
             try { if (fs.existsSync(f)) fs.unlinkSync(f); } catch (e) {}
           }
           if (err) {
-            console.error(`Error rendering short ${i + 1}:`, err);
+            console.error(`Error rendering clip ${i + 1}:`, err);
             return resolve();
           }
           generatedFiles.push({
             name: shortFilename,
-            title: moment.title,
+            title: cleanSafeTitle,
             hook: moment.hook,
             category: 'drafts',
-            categoryLabel: 'Needs Text',
+            categoryLabel: 'Pre Ready Shorts',
             subfolder: '02_Shorts_Drafts',
             url: `/api/video/02_Shorts_Drafts/${encodeURIComponent(shortFilename)}`
           });

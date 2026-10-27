@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Download, Sparkles, FolderDown, Layers, HardDrive } from 'lucide-react';
+import { Download } from 'lucide-react';
 import Header from './components/Header.jsx';
 import DownloadForm from './components/DownloadForm.jsx';
 import DownloadProgress from './components/DownloadProgress.jsx';
@@ -18,10 +18,8 @@ export default function App() {
   const [statusType, setStatusType] = useState('idle'); // idle | running | success | error
   const [videoTitle, setVideoTitle] = useState('');
   const [recentFiles, setRecentFiles] = useState([]);
-  const [folderSizes, setFolderSizes] = useState({ all: 0, downloads: 0, drafts: 0, ready: 0 });
   const [loadingFiles, setLoadingFiles] = useState(false);
-  const [activeTab, setActiveTab] = useState('all'); // 'all' | 'downloads' | 'drafts' | 'ready'
-  const [autoGenerateShorts, setAutoGenerateShorts] = useState(() => localStorage.getItem('auto_shorts_enabled') === 'true');
+  const [activeTab, setActiveTab] = useState('downloads'); // 'downloads' | 'drafts' | 'ready'
 
   // Gemini API Key state
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
@@ -119,7 +117,7 @@ export default function App() {
 
       await fetchRecentFiles();
       setIsReviewModalOpen(false);
-      // Auto-switch to Ready Shorts tab!
+      // Auto-switch to Shorts tab!
       setActiveTab('ready');
     } finally {
       setIsBurningText(false);
@@ -133,9 +131,6 @@ export default function App() {
       const data = await res.json();
       if (data.files) {
         setRecentFiles(data.files);
-      }
-      if (data.sizes) {
-        setFolderSizes(data.sizes);
       }
     } catch (err) {
       console.error('Error fetching videos:', err);
@@ -239,7 +234,7 @@ export default function App() {
             setStatusText('');
           } else if (eventType === 'complete') {
             setStatusType('success');
-            setStatusText('Saved to 01_Downloads');
+            setStatusText('Downloaded');
             setProgress(100);
             if (eventData.filename) {
               setVideoTitle(eventData.filename);
@@ -248,8 +243,8 @@ export default function App() {
             fetchRecentFiles();
             setActiveTab('downloads');
 
-            // Auto-trigger AI Shorts if toggle enabled
-            if (autoGenerateShorts && eventData.filename) {
+            // Default: Auto-create AI viral shorts immediately!
+            if (eventData.filename) {
               const dlFile = {
                 name: eventData.filename,
                 category: 'downloads',
@@ -257,7 +252,7 @@ export default function App() {
               };
               setTimeout(() => {
                 handleGenerateShorts(dlFile);
-              }, 600);
+              }, 500);
             }
           } else if (eventType === 'error') {
             setStatusType('error');
@@ -267,14 +262,14 @@ export default function App() {
       }
     } catch (err) {
       setStatusType('error');
-      setStatusText(err.message || 'Failed to download video.');
+      setStatusText(err.message || 'Download failed.');
     } finally {
       setIsDownloading(false);
       activeDownloadRef.current = false;
     }
   };
 
-  // Automatically triggers download whenever a link is pasted into the window
+  // Auto-download on paste
   const handlePasteEvent = (e) => {
     const rawPasted = e.clipboardData?.getData('text');
     if (rawPasted && isYouTubeUrl(rawPasted)) {
@@ -297,7 +292,7 @@ export default function App() {
     setSelectedVideoForShorts(file);
     setIsShortsModalOpen(true);
     setIsProcessingShorts(true);
-    setShortsStatus('Starting AI Shorts analysis...');
+    setShortsStatus('Finding viral moments...');
     setDiscoveredMoments([]);
     setGeneratedShorts([]);
     setShortsError('');
@@ -359,7 +354,7 @@ export default function App() {
             setShortsStatus(eventData.message);
             setGeneratedShorts(eventData.shorts || []);
             fetchRecentFiles();
-            // Automatically switch active tab in library to Waiting for Text drafts!
+            // Automatically switch active tab to Pre Ready Shorts!
             setActiveTab('drafts');
           } else if (eventType === 'error') {
             setShortsError(eventData.message);
@@ -374,7 +369,7 @@ export default function App() {
   };
 
   const handleDeleteVideo = async (file) => {
-    if (!window.confirm(`Are you sure you want to delete "${file.name}"? This file will be removed from disk.`)) {
+    if (!window.confirm(`Delete "${file.name}"?`)) {
       return;
     }
     try {
@@ -391,18 +386,6 @@ export default function App() {
     }
   };
 
-  const handleOpenFolder = async (category = 'all') => {
-    try {
-      await fetch('/api/open-folder', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ category })
-      });
-    } catch (err) {
-      console.error('Error opening folder:', err);
-    }
-  };
-
   const formatFileSize = (bytes) => {
     if (!bytes) return '0 B';
     const k = 1024;
@@ -413,31 +396,25 @@ export default function App() {
 
   return (
     <div className="container" onPaste={handlePasteEvent}>
-      {/* Sleek Top Navbar with System Storage Stats */}
+      {/* Top Navbar */}
       <Header
         apiKey={apiKey}
         onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
         channelHandle={channelHandle}
         onOpenChannelModal={() => setIsChannelModalOpen(true)}
-        totalVideosCount={recentFiles.length}
-        totalStorageBytes={folderSizes.all || 0}
-        formatFileSize={formatFileSize}
       />
 
       <div className="dashboard-layout">
         {/* LEFT SIDE: All Input and Processing */}
         <aside className="dashboard-left">
-          {/* Download Studio Card */}
+          {/* Download Card */}
           <div className="studio-card">
-            <div className="studio-card-header">
+            <div className="studio-card-header" style={{ marginBottom: '0.85rem' }}>
               <div className="studio-icon-badge">
                 <Download size={18} />
               </div>
               <div>
                 <h2 className="studio-card-title">Download Video</h2>
-                <p className="studio-card-subtitle">
-                  Paste any YouTube video or Shorts link
-                </p>
               </div>
             </div>
 
@@ -449,33 +426,6 @@ export default function App() {
               cleanAndExtractUrl={cleanAndExtractUrl}
               isYouTubeUrl={isYouTubeUrl}
             />
-
-            {/* Auto-Shorts Toggle */}
-            <div className="studio-actions-row">
-              <label
-                className="studio-toggle-label"
-                title="Automatically create 9:16 Shorts with Hinglish moments right after downloading"
-              >
-                <input
-                  type="checkbox"
-                  checked={autoGenerateShorts}
-                  onChange={(e) => {
-                    setAutoGenerateShorts(e.target.checked);
-                    localStorage.setItem('auto_shorts_enabled', e.target.checked ? 'true' : 'false');
-                  }}
-                />
-                <span className="toggle-slider"></span>
-                <span className="studio-toggle-text">
-                  <Sparkles size={13} color="#ef4444" />
-                  Auto-create AI Shorts
-                </span>
-              </label>
-            </div>
-
-            <div className="paste-tip">
-              <span>💡</span>
-              <span><strong>Tip:</strong> Press <code>Ctrl+V</code> anywhere to auto-paste & start.</span>
-            </div>
           </div>
 
           {/* Processing Area */}
@@ -489,13 +439,13 @@ export default function App() {
               downloadStats={downloadStats}
             />
 
-            {/* Live AI Shorts Processing Card */}
+            {/* Live AI Processing Card */}
             {isProcessingShorts && (
               <div className="card live-ai-card">
                 <div className="live-ai-header">
                   <span className="status-badge status-downloading">
                     <span className="pulse-dot"></span>
-                    AI Shorts Processing
+                    Processing Shorts
                   </span>
                   <button
                     type="button"
@@ -503,44 +453,27 @@ export default function App() {
                     className="action-btn-subtle"
                     style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
                   >
-                    View Studio
+                    View
                   </button>
                 </div>
-                <div style={{ fontSize: '0.825rem', fontWeight: 600, color: '#0f172a', margin: '0.6rem 0 0.25rem' }}>
-                  {shortsStatus || 'Analyzing video highlights with Gemini AI...'}
+                <div style={{ fontSize: '0.825rem', fontWeight: 600, color: '#0f172a', margin: '0.5rem 0 0.2rem' }}>
+                  {shortsStatus || 'Finding viral moments with AI...'}
                 </div>
-                {selectedVideoForShorts && (
-                  <div style={{ fontSize: '0.75rem', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {selectedVideoForShorts.name}
-                  </div>
-                )}
               </div>
             )}
 
-            {/* Interactive Storage Overview Card when idle */}
+            {/* Category Quick Filter Buttons */}
             {!isDownloading && statusType === 'idle' && !isProcessingShorts && (
-              <div className="card standby-card">
-                <div className="standby-header">
-                  <div className="standby-status-pill">
-                    <span className="status-dot-green"></span>
-                    <span>Ready for links</span>
-                  </div>
-                  <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Filter by Folder</span>
-                </div>
-
+              <div className="card standby-card" style={{ padding: '0.75rem' }}>
                 <div className="storage-destinations">
                   <button
                     type="button"
                     onClick={() => setActiveTab('downloads')}
                     className={`storage-item-btn ${activeTab === 'downloads' ? 'active' : ''}`}
-                    title="Click to view full video downloads"
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span className="storage-badge badge-dl">01_Downloads</span>
-                      <span className="storage-desc">Full HD Videos</span>
-                    </div>
+                    <span className="storage-badge badge-dl">Downloads</span>
                     <span className="storage-meta-count">
-                      {recentFiles.filter((f) => f.category === 'downloads').length} • {formatFileSize(folderSizes.downloads || 0)}
+                      {recentFiles.filter((f) => f.category === 'downloads').length}
                     </span>
                   </button>
 
@@ -548,14 +481,10 @@ export default function App() {
                     type="button"
                     onClick={() => setActiveTab('drafts')}
                     className={`storage-item-btn ${activeTab === 'drafts' ? 'active' : ''}`}
-                    title="Click to view 9:16 Shorts waiting for text"
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span className="storage-badge badge-drafts">02_Shorts_Drafts</span>
-                      <span className="storage-desc">Draft Shorts</span>
-                    </div>
+                    <span className="storage-badge badge-drafts">Pre Ready Shorts</span>
                     <span className="storage-meta-count">
-                      {recentFiles.filter((f) => f.category === 'drafts').length} • {formatFileSize(folderSizes.drafts || 0)}
+                      {recentFiles.filter((f) => f.category === 'drafts').length}
                     </span>
                   </button>
 
@@ -563,14 +492,10 @@ export default function App() {
                     type="button"
                     onClick={() => setActiveTab('ready')}
                     className={`storage-item-btn ${activeTab === 'ready' ? 'active' : ''}`}
-                    title="Click to view branded ready Shorts"
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span className="storage-badge badge-ready">03_Shorts_Ready</span>
-                      <span className="storage-desc">Ready to Post</span>
-                    </div>
+                    <span className="storage-badge badge-ready">Shorts</span>
                     <span className="storage-meta-count">
-                      {recentFiles.filter((f) => f.category === 'ready').length} • {formatFileSize(folderSizes.ready || 0)}
+                      {recentFiles.filter((f) => f.category === 'ready').length}
                     </span>
                   </button>
                 </div>
@@ -583,20 +508,17 @@ export default function App() {
         <main className="dashboard-right">
           <VideoGallery
             files={recentFiles}
-            loading={loadingFiles}
-            onRefresh={fetchRecentFiles}
             formatFileSize={formatFileSize}
             onGenerateShorts={handleGenerateShorts}
             onReviewShort={handleOpenReviewModal}
             onDeleteVideo={handleDeleteVideo}
-            onOpenFolder={handleOpenFolder}
             activeTab={activeTab}
             setActiveTab={setActiveTab}
           />
         </main>
       </div>
 
-      {/* Gemini API Key Modal */}
+      {/* Modals */}
       <ApiKeyModal
         isOpen={isApiKeyModalOpen}
         onClose={() => setIsApiKeyModalOpen(false)}
@@ -604,7 +526,6 @@ export default function App() {
         onSaveApiKey={handleSaveApiKey}
       />
 
-      {/* Channel Handle Watermark Modal */}
       <ChannelHandleModal
         isOpen={isChannelModalOpen}
         onClose={() => setIsChannelModalOpen(false)}
@@ -612,7 +533,6 @@ export default function App() {
         onSaveHandle={handleSaveChannelHandle}
       />
 
-      {/* Shorts Generation Live Modal */}
       <ShortsGeneratorModal
         isOpen={isShortsModalOpen}
         onClose={() => setIsShortsModalOpen(false)}
@@ -625,7 +545,6 @@ export default function App() {
         onReviewGeneratedShort={handleReviewFromGenerator}
       />
 
-      {/* Shorts Review & Text Burn Modal */}
       <ShortsReviewModal
         isOpen={isReviewModalOpen}
         onClose={() => setIsReviewModalOpen(false)}
