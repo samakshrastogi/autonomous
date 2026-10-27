@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
-import { Sparkles, CheckCircle2, Type } from 'lucide-react';
+import React from 'react';
+import { Sparkles, CheckCircle2, Type, Clock, Download } from 'lucide-react';
 
 export default function VideoCard({ file, formatFileSize, onGenerateShorts, onReviewShort }) {
-  const isShort = /#shorts|\bshorts\b/i.test(file.name);
+  const isShort = file.category === 'drafts' || file.category === 'ready' || /#shorts|\bshorts\b/i.test(file.name);
 
   // Clean title: remove format codes (.f616), raw video IDs [yNd4wg47-PY], and extensions
   const cleanTitle = (name) => {
@@ -36,11 +36,24 @@ export default function VideoCard({ file, formatFileSize, onGenerateShorts, onRe
           Your browser does not support the video tag.
         </video>
 
-        {isShort && (
+        {/* Status Pill on Video Frame */}
+        {file.category === 'ready' ? (
+          <span className="shorts-tag-ready">
+            ✅ Ready Short
+          </span>
+        ) : file.category === 'drafts' ? (
+          <span className="shorts-tag-draft">
+            ⏳ Needs Text
+          </span>
+        ) : file.category === 'downloads' ? (
+          <span className="video-tag-download">
+            📥 Full Video
+          </span>
+        ) : isShort ? (
           <span className="shorts-tag">
             Shorts
           </span>
-        )}
+        ) : null}
       </div>
 
       {/* Video Information & Actions */}
@@ -50,36 +63,38 @@ export default function VideoCard({ file, formatFileSize, onGenerateShorts, onRe
         </h3>
 
         <div className="video-meta">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
             <span className="video-badge">{formatFileSize(file.size)}</span>
             <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{formattedDate}</span>
+            {file.subfolder && (
+              <span className="subfolder-pill" title={`Located in ${file.subfolder}`}>
+                {file.subfolder.replace(/^\d+_/, '')}
+              </span>
+            )}
           </div>
 
           <div className="video-actions">
-            {isShort && onReviewShort ? (
+            {file.category === 'drafts' && onReviewShort ? (
+              <button
+                type="button"
+                onClick={() => onReviewShort(file)}
+                className="action-btn-amber"
+                title="Review this draft and burn your custom top text hook"
+              >
+                <Type size={12} />
+                <span>Add Text</span>
+              </button>
+            ) : file.category === 'ready' && onReviewShort ? (
               <button
                 type="button"
                 onClick={() => onReviewShort(file)}
                 className="action-btn-secondary"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.35rem',
-                  fontSize: '0.75rem',
-                  fontWeight: 600,
-                  padding: '0.28rem 0.6rem',
-                  borderRadius: '0.45rem',
-                  background: '#f8fafc',
-                  color: '#334155',
-                  border: '1px solid #cbd5e1',
-                  cursor: 'pointer'
-                }}
-                title="Review this Short and customize top text & channel username"
+                title="Edit text hook or channel handle on this Short"
               >
-                <Type size={12} color="#ef4444" />
-                <span>Add / Edit Text</span>
+                <Type size={12} color="#16a34a" />
+                <span>Edit Text</span>
               </button>
-            ) : !isShort && onGenerateShorts ? (
+            ) : (!file.category || file.category === 'downloads') && onGenerateShorts ? (
               <button
                 type="button"
                 onClick={() => onGenerateShorts(file)}
@@ -88,6 +103,15 @@ export default function VideoCard({ file, formatFileSize, onGenerateShorts, onRe
               >
                 <Sparkles size={12} />
                 <span>Shorts</span>
+              </button>
+            ) : isShort && onReviewShort ? (
+              <button
+                type="button"
+                onClick={() => onReviewShort(file)}
+                className="action-btn-secondary"
+              >
+                <Type size={12} color="#ef4444" />
+                <span>Add / Edit Text</span>
               </button>
             ) : (
               <span className="short-ready-badge" title="Already in vertical Shorts format">

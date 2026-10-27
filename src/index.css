@@ -755,4 +755,172 @@ body {
   flex-direction: column;
 }
 
+/* Segmented Tabs & Category Badges */
+.gallery-total-badge {
+  font-size: 0.8rem;
+  font-weight: 700;
+  background: #fee2e2;
+  color: #b91c1c;
+  padding: 0.15rem 0.55rem;
+  border-radius: 9999px;
+}
+
+.gallery-tabs-container {
+  margin-bottom: 1.25rem;
+}
+
+.gallery-tabs-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: #f1f5f9;
+  padding: 0.35rem;
+  border-radius: 0.75rem;
+  border: 1px solid #e2e8f0;
+  overflow-x: auto;
+}
+
+.gallery-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 0.55rem;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.825rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.gallery-tab-btn:hover {
+  color: #1e293b;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.gallery-tab-btn.active {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.tab-pill {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.1rem 0.45rem;
+  border-radius: 9999px;
+  min-width: 18px;
+  text-align: center;
+}
+
+.tab-pill-neutral {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.tab-pill-blue {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.tab-pill-amber {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.tab-pill-green {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.gallery-folder-hint {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  margin-top: 0.45rem;
+  padding-left: 0.35rem;
+}
+
+/* Category Badges on Video Card Frame */
+.shorts-tag-draft {
+  position: absolute;
+  top: 0.6rem;
+  left: 0.6rem;
+  background: rgba(245, 158, 11, 0.94);
+  color: #ffffff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.2rem 0.55rem;
+  border-radius: 0.35rem;
+  letter-spacing: 0.03em;
+  pointer-events: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  z-index: 5;
+}
+
+.shorts-tag-ready {
+  position: absolute;
+  top: 0.6rem;
+  left: 0.6rem;
+  background: rgba(22, 163, 74, 0.94);
+  color: #ffffff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.2rem 0.55rem;
+  border-radius: 0.35rem;
+  letter-spacing: 0.03em;
+  pointer-events: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  z-index: 5;
+}
+
+.video-tag-download {
+  position: absolute;
+  top: 0.6rem;
+  left: 0.6rem;
+  background: rgba(37, 99, 235, 0.92);
+  color: #ffffff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.2rem 0.55rem;
+  border-radius: 0.35rem;
+  letter-spacing: 0.03em;
+  pointer-events: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  z-index: 5;
+}
+
+.subfolder-pill {
+  font-size: 0.68rem;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.3rem;
+  border: 1px solid #e2e8f0;
+  font-family: 'JetBrains Mono', Consolas, monospace;
+}
+
+.action-btn-amber {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: #f59e0b;
+  color: #ffffff;
+  border: none;
+  border-radius: 0.45rem;
+  padding: 0.28rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.action-btn-amber:hover {
+  background: #d97706;
+}
+
+
 

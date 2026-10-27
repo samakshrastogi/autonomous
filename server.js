@@ -13,16 +13,79 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 5001;
 
-// Default video download directory as requested
-const DEFAULT_DOWNLOAD_DIR = 'C:\\Users\\Samaksh Rastogi\\downloads\\videos';
+// Video folders by status
+const ROOT_VIDEOS_DIR = process.env.DOWNLOAD_DIR || 'C:\\Users\\Samaksh Rastogi\\downloads\\videos';
+const DEFAULT_DOWNLOAD_DIR = ROOT_VIDEOS_DIR;
+const FOLDERS = {
+  DOWNLOADS: path.join(ROOT_VIDEOS_DIR, '01_Downloads'),
+  SHORTS_DRAFTS: path.join(ROOT_VIDEOS_DIR, '02_Shorts_Drafts'),
+  SHORTS_READY: path.join(ROOT_VIDEOS_DIR, '03_Shorts_Ready')
+};
 
-// Ensure the directory exists
-if (!fs.existsSync(DEFAULT_DOWNLOAD_DIR)) {
-  try {
-    fs.mkdirSync(DEFAULT_DOWNLOAD_DIR, { recursive: true });
-  } catch (err) {
-    console.error(`Could not create default download dir: ${err.message}`);
+// Ensure all directories exist
+Object.values(FOLDERS).forEach((dir) => {
+  if (!fs.existsSync(dir)) {
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+    } catch (err) {
+      console.error(`Could not create folder ${dir}: ${err.message}`);
+    }
   }
+});
+
+// Auto-migrate any unorganized root video files into subfolders
+function autoMigrateLegacyFiles() {
+  try {
+    if (!fs.existsSync(ROOT_VIDEOS_DIR)) return;
+    const entries = fs.readdirSync(ROOT_VIDEOS_DIR, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isFile() && (entry.name.endsWith('.mp4') || entry.name.endsWith('.mkv') || entry.name.endsWith('.webm'))) {
+        const srcPath = path.join(ROOT_VIDEOS_DIR, entry.name);
+        let destDir = FOLDERS.DOWNLOADS;
+        if (entry.name.startsWith('Short -')) {
+          if (entry.name.includes('Golgappa')) {
+            destDir = FOLDERS.SHORTS_READY;
+          } else {
+            destDir = FOLDERS.SHORTS_DRAFTS;
+          }
+        }
+        const destPath = path.join(destDir, entry.name);
+        try {
+          fs.renameSync(srcPath, destPath);
+          console.log(`[Auto-Organize] Moved ${entry.name} -> ${path.basename(destDir)}`);
+        } catch (e) {}
+      }
+    }
+  } catch (err) {
+    console.error('[Auto-Organize Error]:', err);
+  }
+}
+autoMigrateLegacyFiles();
+
+// Helper: Locate a video across all subfolders
+function findVideoFile(filename) {
+  const searchDirs = [
+    FOLDERS.SHORTS_READY,
+    FOLDERS.SHORTS_DRAFTS,
+    FOLDERS.DOWNLOADS,
+    ROOT_VIDEOS_DIR
+  ];
+  for (const dir of searchDirs) {
+    const p = path.join(dir, filename);
+    if (fs.existsSync(p)) {
+      let category = 'downloads';
+      let subfolder = '01_Downloads';
+      if (dir === FOLDERS.SHORTS_READY) {
+        category = 'ready';
+        subfolder = '03_Shorts_Ready';
+      } else if (dir === FOLDERS.SHORTS_DRAFTS) {
+        category = 'drafts';
+        subfolder = '02_Shorts_Drafts';
+      }
+      return { foundPath: p, dir, category, subfolder };
+    }
+  }
+  return null;
 }
 
 app.use(cors());
@@ -36,21 +99,23 @@ app.get('/api/status', (req, res) => {
         ok: false,
         ytdlpInstalled: false,
         error: 'yt-dlp not found in PATH',
-        defaultDir: DEFAULT_DOWNLOAD_DIR
+        defaultDir: ROOT_VIDEOS_DIR,
+        folders: FOLDERS
       });
     }
     res.json({
       ok: true,
       ytdlpInstalled: true,
       version: stdout.trim(),
-      defaultDir: DEFAULT_DOWNLOAD_DIR
+      defaultDir: ROOT_VIDEOS_DIR,
+      folders: FOLDERS
     });
   });
 });
 
 // API: Open download folder in Windows Explorer
 app.post('/api/open-folder', (req, res) => {
-  const targetDir = req.body.dir || DEFAULT_DOWNLOAD_DIR;
+  const targetDir = req.body.dir || ROOT_VIDEOS_DIR;
   if (!fs.existsSync(targetDir)) {
     try {
       fs.mkdirSync(targetDir, { recursive: true });
@@ -69,55 +134,82 @@ app.post('/api/open-folder', (req, res) => {
   });
 });
 
-// API: List recent files in download directory
+// API: List recent files organized by folder & status
 app.get('/api/files', (req, res) => {
-  const targetDir = req.query.dir || DEFAULT_DOWNLOAD_DIR;
-  if (!fs.existsSync(targetDir)) {
-    return res.json({ files: [] });
+  const allFiles = [];
+
+  const subfoldersConfig = [
+    { dir: FOLDERS.SHORTS_READY, category: 'ready', label: 'Ready to Post', subfolder: '03_Shorts_Ready' },
+    { dir: FOLDERS.SHORTS_DRAFTS, category: 'drafts', label: 'Needs Text', subfolder: '02_Shorts_Drafts' },
+    { dir: FOLDERS.DOWNLOADS, category: 'downloads', label: 'Original Video', subfolder: '01_Downloads' }
+  ];
+
+  for (const config of subfoldersConfig) {
+    if (fs.existsSync(config.dir)) {
+      try {
+        const entries = fs.readdirSync(config.dir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isFile() && !entry.name.startsWith('temp_') && (entry.name.endsWith('.mp4') || entry.name.endsWith('.mkv') || entry.name.endsWith('.webm'))) {
+            const fullPath = path.join(config.dir, entry.name);
+            const stats = fs.statSync(fullPath);
+            allFiles.push({
+              name: entry.name,
+              size: stats.size,
+              mtime: stats.mtimeMs,
+              ext: path.extname(entry.name).toLowerCase(),
+              category: config.category,
+              categoryLabel: config.label,
+              subfolder: config.subfolder,
+              url: `/api/video/${encodeURIComponent(config.subfolder)}/${encodeURIComponent(entry.name)}`
+            });
+          }
+        }
+      } catch (e) {
+        console.error(`Error reading ${config.dir}:`, e);
+      }
+    }
   }
 
-  try {
-    const entries = fs.readdirSync(targetDir, { withFileTypes: true });
-    const files = entries
-      .filter((e) => e.isFile() && !e.name.startsWith('temp_') && (e.name.endsWith('.mp4') || e.name.endsWith('.mkv') || e.name.endsWith('.webm')))
-      .map((e) => {
-        const fullPath = path.join(targetDir, e.name);
-        const stats = fs.statSync(fullPath);
-        return {
-          name: e.name,
-          size: stats.size,
-          mtime: stats.mtimeMs,
-          ext: path.extname(e.name).toLowerCase(),
-          url: `/api/video/${encodeURIComponent(e.name)}`
-        };
-      })
-      // Sort newest first
-      .sort((a, b) => b.mtime - a.mtime)
-      .slice(0, 30);
+  // Sort overall newest first
+  allFiles.sort((a, b) => b.mtime - a.mtime);
 
-    res.json({ files, directory: targetDir });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  res.json({
+    files: allFiles,
+    counts: {
+      all: allFiles.length,
+      downloads: allFiles.filter((f) => f.category === 'downloads').length,
+      drafts: allFiles.filter((f) => f.category === 'drafts').length,
+      ready: allFiles.filter((f) => f.category === 'ready').length
+    },
+    directories: FOLDERS
+  });
 });
 
 // API: Stream video file directly to browser for in-frame playback
-app.get('/api/video/:filename', (req, res) => {
+app.get(['/api/video/:subfolder/:filename', '/api/video/:filename'], (req, res) => {
   try {
-    const filename = decodeURIComponent(req.params.filename);
-    const filePath = path.join(DEFAULT_DOWNLOAD_DIR, filename);
+    const { subfolder, filename } = req.params;
+    const nameToFind = decodeURIComponent(filename || subfolder);
 
-    // Prevent directory traversal
-    if (!path.resolve(filePath).startsWith(path.resolve(DEFAULT_DOWNLOAD_DIR))) {
-      return res.status(403).json({ error: 'Access denied' });
+    let targetPath = null;
+    if (subfolder && filename) {
+      const decodedSub = decodeURIComponent(subfolder);
+      const direct = path.join(ROOT_VIDEOS_DIR, decodedSub, nameToFind);
+      if (fs.existsSync(direct)) {
+        targetPath = direct;
+      }
     }
 
-    if (!fs.existsSync(filePath)) {
+    if (!targetPath) {
+      const found = findVideoFile(nameToFind);
+      if (found) targetPath = found.foundPath;
+    }
+
+    if (!targetPath || !fs.existsSync(targetPath)) {
       return res.status(404).json({ error: 'Video not found' });
     }
 
-    // res.sendFile handles byte ranges (HTTP 206) automatically for smooth seeking
-    res.sendFile(filePath);
+    res.sendFile(targetPath);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -126,7 +218,7 @@ app.get('/api/video/:filename', (req, res) => {
 // API: Download video with Server-Sent Events (SSE) for live streaming progress
 app.post('/api/download', (req, res) => {
   const { url, outputDir } = req.body;
-  const targetDir = outputDir || DEFAULT_DOWNLOAD_DIR;
+  const targetDir = outputDir || FOLDERS.DOWNLOADS;
 
   if (!url || typeof url !== 'string' || !url.trim()) {
     return res.status(400).json({ error: 'Please provide a valid YouTube URL.' });
@@ -355,10 +447,11 @@ app.post('/api/generate-shorts', async (req, res) => {
     return res.status(400).json({ error: 'Video filename is required.' });
   }
 
-  const videoPath = path.join(DEFAULT_DOWNLOAD_DIR, filename);
-  if (!fs.existsSync(videoPath)) {
+  const fileInfo = findVideoFile(filename);
+  if (!fileInfo) {
     return res.status(404).json({ error: 'Video file not found on disk.' });
   }
+  const videoPath = fileInfo.foundPath;
 
   // Set up SSE
   res.setHeader('Content-Type', 'text/event-stream');
@@ -370,7 +463,7 @@ app.post('/api/generate-shorts', async (req, res) => {
     res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   };
 
-  const tempAudioPath = path.join(DEFAULT_DOWNLOAD_DIR, `temp_audio_${Date.now()}.mp3`);
+  const tempAudioPath = path.join(ROOT_VIDEOS_DIR, `temp_audio_${Date.now()}.mp3`);
   let uploadedFile = null;
   const fileManager = new GoogleAIFileManager(key.trim());
   const genAI = new GoogleGenerativeAI(key.trim());
@@ -483,7 +576,7 @@ STRICT REQUIREMENTS:
       const moment = moments[i];
       const safeTitle = moment.title.replace(/[\\/:*?"<>|]/g, '').trim();
       const shortFilename = `Short - ${safeTitle} #shorts.mp4`;
-      const outputShortPath = path.join(DEFAULT_DOWNLOAD_DIR, shortFilename);
+      const outputShortPath = path.join(FOLDERS.SHORTS_DRAFTS, shortFilename);
 
       sendEvent('status', {
         phase: 'rendering',
@@ -517,7 +610,10 @@ STRICT REQUIREMENTS:
             name: shortFilename,
             title: moment.title,
             hook: moment.hook,
-            url: `/api/video/${encodeURIComponent(shortFilename)}`
+            category: 'drafts',
+            categoryLabel: 'Needs Text',
+            subfolder: '02_Shorts_Drafts',
+            url: `/api/video/02_Shorts_Drafts/${encodeURIComponent(shortFilename)}`
           });
           resolve();
         });
@@ -526,7 +622,7 @@ STRICT REQUIREMENTS:
 
     sendEvent('complete', {
       success: true,
-      message: `Successfully generated ${generatedFiles.length} Shorts!`,
+      message: `Successfully generated ${generatedFiles.length} Shorts! Saved in 02_Shorts_Drafts.`,
       shorts: generatedFiles
     });
     res.end();
@@ -553,13 +649,15 @@ app.post('/api/burn-text', async (req, res) => {
     return res.status(400).json({ error: 'Filename is required' });
   }
 
-  const videoPath = path.join(DEFAULT_DOWNLOAD_DIR, filename);
-  if (!fs.existsSync(videoPath)) {
+  const fileInfo = findVideoFile(filename);
+  if (!fileInfo) {
     return res.status(404).json({ error: 'Video file not found on disk' });
   }
+  const videoPath = fileInfo.foundPath;
 
   const tempFilesTracker = [];
-  const tempOutputPath = path.join(DEFAULT_DOWNLOAD_DIR, `temp_burn_${Date.now()}.mp4`);
+  const tempOutputPath = path.join(FOLDERS.SHORTS_READY, `temp_burn_${Date.now()}.mp4`);
+  const finalReadyPath = path.join(FOLDERS.SHORTS_READY, filename);
 
   try {
     const drawFilters = buildDrawTextFilters(topText, channelHandle, tempFilesTracker);
@@ -576,36 +674,46 @@ app.post('/api/burn-text', async (req, res) => {
       });
     });
 
-    // Replace original file with the text-burned file safely
+    // Move to 03_Shorts_Ready and remove from 02_Shorts_Drafts if it was in drafts
     try {
-      if (fs.existsSync(videoPath)) {
-        fs.unlinkSync(videoPath);
+      if (fs.existsSync(finalReadyPath)) {
+        fs.unlinkSync(finalReadyPath);
       }
-      fs.renameSync(tempOutputPath, videoPath);
+      fs.renameSync(tempOutputPath, finalReadyPath);
+      if (videoPath !== finalReadyPath && fs.existsSync(videoPath)) {
+        try { fs.unlinkSync(videoPath); } catch (e) {}
+      }
     } catch (replaceErr) {
       try {
-        fs.copyFileSync(tempOutputPath, videoPath);
+        fs.copyFileSync(tempOutputPath, finalReadyPath);
         fs.unlinkSync(tempOutputPath);
+        if (videoPath !== finalReadyPath && fs.existsSync(videoPath)) {
+          try { fs.unlinkSync(videoPath); } catch (e) {}
+        }
       } catch (copyErr) {
         const ext = path.extname(filename);
         const base = path.basename(filename, ext);
         const brandedName = `${base} (branded)${ext}`;
-        const brandedPath = path.join(DEFAULT_DOWNLOAD_DIR, brandedName);
+        const brandedPath = path.join(FOLDERS.SHORTS_READY, brandedName);
         fs.renameSync(tempOutputPath, brandedPath);
         return res.json({
           success: true,
-          message: 'Branded Short saved successfully!',
+          message: 'Branded Short saved to 03_Shorts_Ready!',
           filename: brandedName,
-          url: `/api/video/${encodeURIComponent(brandedName)}?t=${Date.now()}`
+          category: 'ready',
+          subfolder: '03_Shorts_Ready',
+          url: `/api/video/03_Shorts_Ready/${encodeURIComponent(brandedName)}?t=${Date.now()}`
         });
       }
     }
 
     res.json({
       success: true,
-      message: 'Short text and branding applied successfully!',
+      message: 'Short moved to 03_Shorts_Ready with branding!',
       filename: filename,
-      url: `/api/video/${encodeURIComponent(filename)}?t=${Date.now()}`
+      category: 'ready',
+      subfolder: '03_Shorts_Ready',
+      url: `/api/video/03_Shorts_Ready/${encodeURIComponent(filename)}?t=${Date.now()}`
     });
   } catch (err) {
     console.error('Error burning text to short:', err);
