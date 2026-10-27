@@ -3,6 +3,8 @@ import Header from './components/Header.jsx';
 import DownloadForm from './components/DownloadForm.jsx';
 import DownloadProgress from './components/DownloadProgress.jsx';
 import VideoGallery from './components/VideoGallery.jsx';
+import ApiKeyModal from './components/ApiKeyModal.jsx';
+import ShortsGeneratorModal from './components/ShortsGeneratorModal.jsx';
 
 export default function App() {
   const [url, setUrl] = useState('');
@@ -16,11 +18,29 @@ export default function App() {
   const [recentFiles, setRecentFiles] = useState([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
 
+  // Gemini API Key state
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
+
+  // Shorts Generation modal state
+  const [isShortsModalOpen, setIsShortsModalOpen] = useState(false);
+  const [selectedVideoForShorts, setSelectedVideoForShorts] = useState(null);
+  const [shortsStatus, setShortsStatus] = useState('');
+  const [discoveredMoments, setDiscoveredMoments] = useState([]);
+  const [generatedShorts, setGeneratedShorts] = useState([]);
+  const [isProcessingShorts, setIsProcessingShorts] = useState(false);
+  const [shortsError, setShortsError] = useState('');
+
   const activeDownloadRef = useRef(false);
 
   useEffect(() => {
     fetchRecentFiles();
   }, []);
+
+  const handleSaveApiKey = (key) => {
+    setApiKey(key);
+    localStorage.setItem('gemini_api_key', key);
+  };
 
   const fetchRecentFiles = async () => {
     setLoadingFiles(true);
@@ -37,7 +57,6 @@ export default function App() {
     }
   };
 
-  // Safely extract clean YouTube URL from any raw pasted text
   const cleanAndExtractUrl = (text) => {
     if (!text || typeof text !== 'string') return '';
     const match = text.match(/(https?:\/\/(?:www\.)?(?:youtube\.com\/(?:watch\?v=|shorts\/|live\/)|youtu\.be\/)[a-zA-Z0-9_\-]+[^\s]*)/i);
@@ -138,7 +157,6 @@ export default function App() {
             if (eventData.filename) {
               setVideoTitle(eventData.filename);
             }
-            // Clear the input after download completes
             setUrl('');
             fetchRecentFiles();
           } else if (eventType === 'error') {
@@ -175,6 +193,90 @@ export default function App() {
     }
   };
 
+  // Trigger Gemini Shorts Generation pipeline
+  const handleGenerateShorts = async (file) => {
+    if (!apiKey) {
+      setSelectedVideoForShorts(file);
+      setIsApiKeyModalOpen(true);
+      return;
+    }
+
+    setSelectedVideoForShorts(file);
+    setIsShortsModalOpen(true);
+    setIsProcessingShorts(true);
+    setShortsStatus('Starting AI Shorts analysis...');
+    setDiscoveredMoments([]);
+    setGeneratedShorts([]);
+    setShortsError('');
+
+    try {
+      const response = await fetch('/api/generate-shorts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename: file.name,
+          apiKey: apiKey
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server returned error status ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split('\n\n');
+        buffer = events.pop() || '';
+
+        for (const block of events) {
+          if (!block.trim()) continue;
+
+          let eventType = 'message';
+          let eventData = null;
+
+          const lines = block.split('\n');
+          for (const line of lines) {
+            if (line.startsWith('event:')) {
+              eventType = line.replace('event:', '').trim();
+            } else if (line.startsWith('data:')) {
+              try {
+                eventData = JSON.parse(line.replace('data:', '').trim());
+              } catch (e) {
+                // ignore
+              }
+            }
+          }
+
+          if (!eventData) continue;
+
+          if (eventType === 'status') {
+            setShortsStatus(eventData.message);
+          } else if (eventType === 'moments') {
+            setDiscoveredMoments(eventData.moments || []);
+          } else if (eventType === 'complete') {
+            setShortsStatus(eventData.message);
+            setGeneratedShorts(eventData.shorts || []);
+            fetchRecentFiles();
+          } else if (eventType === 'error') {
+            setShortsError(eventData.message);
+          }
+        }
+      }
+    } catch (err) {
+      setShortsError(err.message || 'Failed to generate Shorts.');
+    } finally {
+      setIsProcessingShorts(false);
+    }
+  };
+
   const formatFileSize = (bytes) => {
     if (!bytes) return '0 B';
     const k = 1024;
@@ -185,7 +287,10 @@ export default function App() {
 
   return (
     <div className="container" onPaste={handlePasteEvent}>
-      <Header />
+      <Header
+        apiKey={apiKey}
+        onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
+      />
 
       <DownloadForm
         url={url}
@@ -213,6 +318,27 @@ export default function App() {
         onRefresh={fetchRecentFiles}
         onOpenFolder={handleOpenFolder}
         formatFileSize={formatFileSize}
+        onGenerateShorts={handleGenerateShorts}
+      />
+
+      {/* Gemini API Key Modal */}
+      <ApiKeyModal
+        isOpen={isApiKeyModalOpen}
+        onClose={() => setIsApiKeyModalOpen(false)}
+        apiKey={apiKey}
+        onSaveApiKey={handleSaveApiKey}
+      />
+
+      {/* Shorts Generation Live Modal */}
+      <ShortsGeneratorModal
+        isOpen={isShortsModalOpen}
+        onClose={() => setIsShortsModalOpen(false)}
+        videoFile={selectedVideoForShorts}
+        generationStatus={shortsStatus}
+        discoveredMoments={discoveredMoments}
+        generatedShorts={generatedShorts}
+        isProcessing={isProcessingShorts}
+        error={shortsError}
       />
     </div>
   );

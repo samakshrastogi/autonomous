@@ -1,7 +1,7 @@
 import React from 'react';
-import { FolderOpen } from 'lucide-react';
+import { FolderOpen, Sparkles } from 'lucide-react';
 
-export default function VideoCard({ file, onOpenFolder, formatFileSize }) {
+export default function VideoCard({ file, onOpenFolder, formatFileSize, onGenerateShorts }) {
   const isShort = /#shorts|\bshorts\b/i.test(file.name);
 
   const cleanTitle = (name) => {
@@ -52,6 +52,18 @@ export default function VideoCard({ file, onOpenFolder, formatFileSize }) {
           </div>
 
           <div className="video-actions">
+            {!isShort && onGenerateShorts && (
+              <button
+                type="button"
+                onClick={() => onGenerateShorts(file)}
+                className="action-btn-primary"
+                title="Generate 9:16 viral Shorts with Gemini AI in Hinglish"
+              >
+                <Sparkles size={12} />
+                <span>Shorts</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={onOpenFolder}

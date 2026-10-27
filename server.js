@@ -4,6 +4,8 @@ import { spawn, exec } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleAIFileManager } from '@google/generative-ai/server';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -254,6 +256,168 @@ app.post('/api/download', (req, res) => {
       }
     }
   });
+});
+
+// API: Generate Shorts using Gemini Flash & FFmpeg
+app.post('/api/generate-shorts', async (req, res) => {
+  const { filename, apiKey } = req.body;
+  const key = apiKey || process.env.GEMINI_API_KEY;
+
+  if (!key || typeof key !== 'string' || !key.trim()) {
+    return res.status(400).json({ error: 'Gemini API key is required. Please provide your API key.' });
+  }
+
+  if (!filename) {
+    return res.status(400).json({ error: 'Video filename is required.' });
+  }
+
+  const videoPath = path.join(DEFAULT_DOWNLOAD_DIR, filename);
+  if (!fs.existsSync(videoPath)) {
+    return res.status(404).json({ error: 'Video file not found on disk.' });
+  }
+
+  // Set up SSE
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const sendEvent = (event, data) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  const tempAudioPath = path.join(DEFAULT_DOWNLOAD_DIR, `temp_audio_${Date.now()}.mp3`);
+  let uploadedFile = null;
+  const fileManager = new GoogleAIFileManager(key.trim());
+  const genAI = new GoogleGenerativeAI(key.trim());
+
+  try {
+    sendEvent('status', { phase: 'extracting', message: 'Extracting audio for rapid analysis...' });
+
+    // 1. Ultra-fast audio extraction (takes 1-2s)
+    await new Promise((resolve, reject) => {
+      exec(`ffmpeg -i "${videoPath}" -vn -ar 16000 -ac 1 -b:a 48k "${tempAudioPath}" -y`, (err) => {
+        if (err) return reject(new Error('Audio extraction failed: ' + err.message));
+        resolve();
+      });
+    });
+
+    sendEvent('status', { phase: 'uploading', message: 'Uploading audio to Gemini Flash...' });
+
+    // 2. Upload lightweight audio file to Gemini
+    uploadedFile = await fileManager.uploadFile(tempAudioPath, {
+      mimeType: 'audio/mp3',
+      displayName: `audio_${filename}`
+    });
+
+    sendEvent('status', { phase: 'analyzing', message: 'Gemini is finding viral moments in Hinglish...' });
+
+    // 3. Prompt Gemini Flash with JSON response
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-1.5-flash',
+      generationConfig: {
+        responseMimeType: 'application/json'
+      }
+    });
+
+    const prompt = `Analyze this video audio carefully.
+Find 3 to 5 of the most engaging, hilarious, high-energy, or dramatic viral moments suitable for YouTube Shorts (duration between 20 to 55 seconds each).
+
+STRICT REQUIREMENTS:
+1. Every title MUST be in conversational Hinglish (Hindi written in English alphabets). Examples: "Nischay ka epic reaction jab sab shocked ho gaye", "Yeh twist dekh ke sabki hasi chhoot gayi", "Bhai ne yeh kya bol diya".
+2. Hook must be in Hinglish (e.g. "Wait for the end twist...", "Dhyan se dekho kya hua...").
+3. Timestamps MUST be in format "HH:MM:SS" or "MM:SS" (e.g. "00:01:23").
+4. Return a JSON array of objects with the exact schema:
+[
+  {
+    "title": "Hinglish title (under 50 chars, without hashtags)",
+    "hook": "Hinglish hook",
+    "start": "00:01:23",
+    "end": "00:01:55"
+  }
+]`;
+
+    const result = await model.generateContent([
+      {
+        fileData: {
+          mimeType: uploadedFile.file.mimeType,
+          fileUri: uploadedFile.file.uri
+        }
+      },
+      { text: prompt }
+    ]);
+
+    const responseText = result.response.text();
+    let moments = [];
+    try {
+      moments = JSON.parse(responseText);
+    } catch (e) {
+      console.error('Failed to parse Gemini JSON:', responseText);
+      throw new Error('Gemini returned an invalid response format.');
+    }
+
+    if (!Array.isArray(moments) || moments.length === 0) {
+      throw new Error('No suitable moments found for Shorts in this video.');
+    }
+
+    sendEvent('moments', { moments });
+
+    // 4. Render 9:16 Shorts with FFmpeg (fast)
+    const generatedFiles = [];
+    for (let i = 0; i < moments.length; i++) {
+      const moment = moments[i];
+      const safeTitle = moment.title.replace(/[\\/:*?"<>|]/g, '').trim();
+      const shortFilename = `Short - ${safeTitle} #shorts.mp4`;
+      const outputShortPath = path.join(DEFAULT_DOWNLOAD_DIR, shortFilename);
+
+      sendEvent('status', {
+        phase: 'rendering',
+        message: `Rendering Short ${i + 1}/${moments.length}: "${moment.title}" (9:16 frame)...`,
+        current: i + 1,
+        total: moments.length,
+        title: moment.title
+      });
+
+      // FFmpeg command to cut and create vertical 9:16 Short with blurred background
+      const ffmpegCmd = `ffmpeg -ss ${moment.start} -to ${moment.end} -i "${videoPath}" -vf "split[a][b];[a]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=15:5[bg];[b]scale=1080:-1[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2" -preset ultrafast -c:v libx264 -crf 23 -c:a aac -threads 0 -y "${outputShortPath}"`;
+
+      await new Promise((resolve) => {
+        exec(ffmpegCmd, (err) => {
+          if (err) {
+            console.error(`Error rendering short ${i + 1}:`, err);
+            return resolve();
+          }
+          generatedFiles.push({
+            name: shortFilename,
+            title: moment.title,
+            hook: moment.hook,
+            url: `/api/video/${encodeURIComponent(shortFilename)}`
+          });
+          resolve();
+        });
+      });
+    }
+
+    sendEvent('complete', {
+      success: true,
+      message: `Successfully generated ${generatedFiles.length} Shorts!`,
+      shorts: generatedFiles
+    });
+    res.end();
+
+  } catch (err) {
+    console.error('Shorts generation error:', err);
+    sendEvent('error', { message: err.message });
+    res.end();
+  } finally {
+    // Cleanup temporary files
+    if (fs.existsSync(tempAudioPath)) {
+      try { fs.unlinkSync(tempAudioPath); } catch (e) {}
+    }
+    if (uploadedFile && uploadedFile.file && uploadedFile.file.name) {
+      try { await fileManager.deleteFile(uploadedFile.file.name); } catch (e) {}
+    }
+  }
 });
 
 // Serve static frontend build if it exists
