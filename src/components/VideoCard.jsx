@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, Type, Download, Trash2 } from 'lucide-react';
+import { Sparkles, Type, Download, Trash2, Clock, Film } from 'lucide-react';
 
 export default function VideoCard({
   file,
@@ -8,13 +8,17 @@ export default function VideoCard({
   onReviewShort,
   onDelete
 }) {
-  const isShort = file.category === 'drafts' || file.category === 'ready' || file.name.startsWith('Short -') || /#shorts|\bshorts\b/i.test(file.name);
+  const isShort =
+    file.category === 'drafts' ||
+    file.category === 'ready' ||
+    file.name.startsWith('Short -') ||
+    /#shorts|\bshorts\b/i.test(file.name);
 
   // Clean title: remove "Short - ", format codes, raw video IDs, and extensions
   const cleanTitle = (name) => {
     if (!name) return 'Video';
     return name
-      .replace(/^Short\s*[-–—:]\s*/i, '') // Remove "Short - "
+      .replace(/^Short\s*[-–—:]\s*/i, '')
       .replace(/\[[a-zA-Z0-9_\-]{8,16}\]/g, '')
       .replace(/\([a-zA-Z0-9_\-]{8,16}\)/g, '')
       .replace(/\[Branded\]/gi, '')
@@ -30,12 +34,22 @@ export default function VideoCard({
     day: 'numeric'
   });
 
+  const formatDuration = (sec) => {
+    if (!sec || isNaN(sec)) return null;
+    const s = Math.floor(sec);
+    const m = Math.floor(s / 60);
+    const rem = s % 60;
+    return `${m}:${String(rem).padStart(2, '0')}`;
+  };
+
+  const displayTitle = file.title || cleanTitle(file.name);
+
   return (
-    <div className={`video-card ${isShort ? 'video-card-short' : ''}`}>
+    <div className={`video-card ${isShort ? 'video-card-short' : 'video-card-landscape'}`}>
       {/* Framed Video Player */}
       <div className={`video-frame-container ${isShort ? 'frame-vertical-short' : 'frame-landscape-video'}`}>
         <video
-          className="video-player"
+          className={`video-player ${isShort ? 'vertical-player' : 'landscape-player'}`}
           controls
           controlsList="nodownload"
           preload="metadata"
@@ -45,28 +59,38 @@ export default function VideoCard({
           Your browser does not support the video tag.
         </video>
 
-        {/* Status Badge */}
+        {/* Category Badge (Top Left) */}
         {file.category === 'ready' ? (
           <span className="shorts-tag-ready">
-            Shorts
+            <Sparkles size={11} />
+            <span>Shorts</span>
           </span>
         ) : file.category === 'drafts' ? (
           <span className="shorts-tag-draft">
-            Pre Ready
+            <Clock size={11} />
+            <span>Pre Ready</span>
           </span>
         ) : (
           <span className="video-tag-download">
-            Download
+            <Film size={11} />
+            <span>Source</span>
           </span>
         )}
 
-        {/* Quick Action Hover Buttons */}
+        {/* Duration Pill (Bottom Right of Video) */}
+        {file.duration && (
+          <span className="video-duration-pill">
+            {formatDuration(file.duration)}
+          </span>
+        )}
+
+        {/* Quick Action Hover Buttons (Top Right) */}
         <div className="frame-quick-actions">
           <a
             href={file.url}
             download={file.name}
             className="frame-action-btn"
-            title="Download"
+            title="Download original file"
             onClick={(e) => e.stopPropagation()}
           >
             <Download size={13} />
@@ -76,7 +100,7 @@ export default function VideoCard({
             <button
               type="button"
               className="frame-action-btn frame-delete-btn"
-              title="Delete"
+              title="Delete video"
               onClick={(e) => {
                 e.stopPropagation();
                 onDelete(file);
@@ -88,45 +112,66 @@ export default function VideoCard({
         </div>
       </div>
 
-      {/* Video Info & Action */}
+      {/* Video Info & Actions */}
       <div className="video-body">
-        <h3 className="video-title" title={cleanTitle(file.name)}>
-          {cleanTitle(file.name)}
+        <h3 className="video-title" title={displayTitle}>
+          {displayTitle}
         </h3>
 
-        <div className="video-meta">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-            <span className="video-badge">{formatFileSize(file.size)}</span>
-            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{formattedDate}</span>
+        <div className="video-meta-row">
+          <div className="video-meta-tags">
+            <span className="video-badge-size">{formatFileSize(file.size)}</span>
+            <span className="video-badge-date">{formattedDate}</span>
           </div>
 
-          <div className="video-actions">
-            {file.category === 'drafts' && onReviewShort ? (
+          {/* Quick Actions Bar */}
+          <div className="video-actions-container">
+            {file.category === 'ready' ? (
+              <div className="ready-action-buttons">
+                {/* 1-Click Download Button */}
+                <a
+                  href={file.url}
+                  download={file.name}
+                  className="card-btn-download-hd"
+                  title="Download final Short in 1080p HD"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Download size={13} />
+                  <span>Download</span>
+                </a>
+
+                {/* Edit Text Button */}
+                {onReviewShort && (
+                  <button
+                    type="button"
+                    onClick={() => onReviewShort(file)}
+                    className="card-btn-edit-text"
+                    title="Customize title or channel watermark"
+                  >
+                    <Type size={12} />
+                    <span>Edit</span>
+                  </button>
+                )}
+              </div>
+            ) : file.category === 'drafts' && onReviewShort ? (
               <button
                 type="button"
                 onClick={() => onReviewShort(file)}
-                className="action-btn-amber"
+                className="action-btn-amber-full"
+                title="Add hook text & watermark branding"
               >
-                <Type size={12} />
-                <span>Add Text</span>
-              </button>
-            ) : file.category === 'ready' && onReviewShort ? (
-              <button
-                type="button"
-                onClick={() => onReviewShort(file)}
-                className="action-btn-green"
-              >
-                <Type size={12} />
-                <span>Edit Text</span>
+                <Sparkles size={13} />
+                <span>Add Text & Brand</span>
               </button>
             ) : onGenerateShorts ? (
               <button
                 type="button"
                 onClick={() => onGenerateShorts(file)}
-                className="action-btn-primary"
+                className="action-btn-primary-full"
+                title="Detect viral moments & generate 9:16 vertical Shorts"
               >
-                <Sparkles size={12} />
-                <span>Shorts</span>
+                <Sparkles size={13} />
+                <span>Generate Shorts</span>
               </button>
             ) : null}
           </div>

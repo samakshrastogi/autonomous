@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link2, Clipboard, X, Download } from 'lucide-react';
+import { Link2, Clipboard, X, Download, Sparkles, Loader2 } from 'lucide-react';
 
 export default function DownloadForm({
   url,
@@ -20,7 +20,7 @@ export default function DownloadForm({
         }
       }
     } catch (err) {
-      const inputEl = document.querySelector('.omnibar-input');
+      const inputEl = document.querySelector('.download-input-field');
       if (inputEl) inputEl.focus();
     }
   };
@@ -45,14 +45,17 @@ export default function DownloadForm({
     }
   };
 
+  const hasValidUrl = url && url.trim().length > 0;
+
   return (
-    <div className="omnibar-container" style={{ marginBottom: 0 }}>
-      <form onSubmit={handleSubmit} className="omnibar-form">
-        <Link2 size={18} className="omnibar-icon" />
+    <form onSubmit={handleSubmit} className="download-form-stack">
+      {/* Search Input Row with Paste Pill inside */}
+      <div className="download-input-container">
+        <Link2 size={16} className="download-input-icon" />
 
         <input
           type="text"
-          className="omnibar-input"
+          className="download-input-field"
           placeholder="Paste YouTube or Shorts link..."
           value={url}
           onChange={handleInputChange}
@@ -63,38 +66,51 @@ export default function DownloadForm({
         {url && (
           <button
             type="button"
-            className="omnibar-clear-btn"
-            title="Clear"
+            className="download-clear-pill"
+            title="Clear link"
             onClick={() => setUrl('')}
             disabled={isDownloading}
           >
-            <X size={15} />
+            <X size={14} />
           </button>
         )}
 
         <button
           type="button"
-          className="omnibar-paste-btn"
-          title="Paste from clipboard"
+          className="download-paste-pill"
+          title="Paste link from clipboard"
           onClick={handleClipboardPaste}
           disabled={isDownloading}
         >
-          <Clipboard size={14} />
+          <Clipboard size={13} />
           <span>Paste</span>
         </button>
+      </div>
 
-        {url && (
-          <button
-            type="submit"
-            className="omnibar-download-btn"
-            title="Download video"
-            disabled={isDownloading}
-          >
-            <Download size={14} />
-            <span>Download</span>
-          </button>
+      {/* Prominent Full-Width Action Button */}
+      <button
+        type="submit"
+        className="download-action-btn-full"
+        disabled={!hasValidUrl || isDownloading}
+      >
+        {isDownloading ? (
+          <>
+            <Loader2 size={16} className="spin" />
+            <span>Downloading Video...</span>
+          </>
+        ) : (
+          <>
+            <Download size={16} />
+            <span>Download & Create Shorts</span>
+          </>
         )}
-      </form>
-    </div>
+      </button>
+
+      {/* Helpful Tip */}
+      <div className="download-hint-text">
+        <Sparkles size={12} color="#f59e0b" />
+        <span>Auto-generates 9:16 viral Shorts upon download</span>
+      </div>
+    </form>
   );
 }

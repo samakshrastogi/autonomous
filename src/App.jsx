@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import { Download, Clock, CheckCircle2, Sparkles } from 'lucide-react';
+import { Download, Clock, CheckCircle2, Sparkles, HardDrive } from 'lucide-react';
 import Header from './components/Header.jsx';
 import DownloadForm from './components/DownloadForm.jsx';
 import DownloadProgress from './components/DownloadProgress.jsx';
@@ -486,6 +486,59 @@ export default function App() {
               }}
               onReviewGeneratedShort={handleReviewFromGenerator}
             />
+          </div>
+
+          {/* Workspace Summary Card */}
+          <div className="studio-card studio-stats-card">
+            <div className="stats-header-row">
+              <div className="stats-title-wrap">
+                <HardDrive size={15} color="#38bdf8" />
+                <span className="stats-card-title">Studio Library</span>
+              </div>
+              <span className="stats-total-pill">
+                {recentFiles.length} Videos
+              </span>
+            </div>
+
+            <div className="stats-pills-grid">
+              <div
+                className={`stat-box ${activeTab === 'downloads' ? 'stat-box-active' : ''}`}
+                onClick={() => setActiveTab('downloads')}
+                title="View Source Downloads"
+              >
+                <span className="stat-box-num text-cyan">
+                  {recentFiles.filter((f) => f.category === 'downloads').length}
+                </span>
+                <span className="stat-box-label">Sources</span>
+              </div>
+
+              <div
+                className={`stat-box ${activeTab === 'drafts' ? 'stat-box-active' : ''}`}
+                onClick={() => setActiveTab('drafts')}
+                title="View Pre-Ready Shorts"
+              >
+                <span className="stat-box-num text-amber">
+                  {recentFiles.filter((f) => f.category === 'drafts').length}
+                </span>
+                <span className="stat-box-label">Pre-Ready</span>
+              </div>
+
+              <div
+                className={`stat-box ${activeTab === 'ready' ? 'stat-box-active' : ''}`}
+                onClick={() => setActiveTab('ready')}
+                title="View Ready Shorts"
+              >
+                <span className="stat-box-num text-emerald">
+                  {recentFiles.filter((f) => f.category === 'ready').length}
+                </span>
+                <span className="stat-box-label">Shorts</span>
+              </div>
+            </div>
+
+            <div className="stats-storage-row">
+              <span>Total Size</span>
+              <strong>{formatFileSize(recentFiles.reduce((acc, f) => acc + (f.size || 0), 0))}</strong>
+            </div>
           </div>
         </aside>
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle2, AlertCircle, Download, Check } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Download, Check, Clock, Gauge, HardDrive } from 'lucide-react';
 
 export default function DownloadProgress({
   statusType,
@@ -44,13 +44,13 @@ export default function DownloadProgress({
   const hasValidSize = downloadStats.size && downloadStats.size.trim() !== '~' && downloadStats.size.trim() !== '';
 
   return (
-    <div className="card progress-card" style={{ marginBottom: '1.25rem', border: isSuccess ? '1px solid #bbf7d0' : isError ? '1px solid #fecaca' : '1px solid #e2e8f0' }}>
-      {/* 3-Step Timeline */}
+    <div className={`studio-progress-card ${isSuccess ? 'success-card' : isError ? 'error-card' : ''}`}>
+      {/* 3-Step Visual Timeline */}
       {!isError && (
         <div className="download-stepper-bar">
           <div className={`stepper-node ${currentStep > 1 || isSuccess ? 'completed' : currentStep === 1 ? 'active' : ''}`}>
             <div className="stepper-circle">
-              {currentStep > 1 || isSuccess ? <Check size={12} /> : '1'}
+              {currentStep > 1 || isSuccess ? <Check size={11} /> : '1'}
             </div>
             <span className="stepper-label">Connecting</span>
           </div>
@@ -59,7 +59,7 @@ export default function DownloadProgress({
 
           <div className={`stepper-node ${currentStep > 2 || isSuccess ? 'completed' : currentStep === 2 ? 'active' : ''}`}>
             <div className="stepper-circle">
-              {currentStep > 2 || isSuccess ? <Check size={12} /> : '2'}
+              {currentStep > 2 || isSuccess ? <Check size={11} /> : '2'}
             </div>
             <span className="stepper-label">Downloading</span>
           </div>
@@ -68,48 +68,48 @@ export default function DownloadProgress({
 
           <div className={`stepper-node ${isSuccess ? 'completed' : currentStep === 3 ? 'active' : ''}`}>
             <div className="stepper-circle">
-              {isSuccess ? <Check size={12} /> : '3'}
+              {isSuccess ? <Check size={11} /> : '3'}
             </div>
             <span className="stepper-label">Saved</span>
           </div>
         </div>
       )}
 
-      {/* Header Info */}
-      <div className="progress-header" style={{ marginTop: isError ? '0' : '0.5rem', marginBottom: '0.45rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+      {/* Header Info: Status Pill + Percentage */}
+      <div className="progress-header-row">
+        <div className="progress-status-wrap">
           {isDownloading && (
             <span className="status-badge status-downloading">
               <span className="pulse-dot"></span>
-              {currentStep === 1 ? 'Connecting...' : currentStep === 3 ? 'Finalizing...' : 'Downloading...'}
+              <span>{currentStep === 1 ? 'Connecting...' : currentStep === 3 ? 'Finalizing 1080p...' : 'Downloading Video...'}</span>
             </span>
           )}
           {isSuccess && (
             <span className="status-badge status-success">
-              <CheckCircle2 size={14} />
-              Downloaded
+              <CheckCircle2 size={13} />
+              <span>Downloaded</span>
             </span>
           )}
           {isError && (
             <span className="status-badge status-error">
-              <AlertCircle size={14} />
-              Failed
+              <AlertCircle size={13} />
+              <span>Failed</span>
             </span>
           )}
         </div>
 
         {!isError && (
-          <span style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a' }}>
-            {isSuccess ? '100%' : progress > 0 ? `${progress.toFixed(0)}%` : '...'}
+          <span className="progress-pct-value">
+            {isSuccess ? '100%' : progress > 0 ? `${progress.toFixed(0)}%` : '0%'}
           </span>
         )}
       </div>
 
-      {/* Clean Video Title */}
+      {/* Video Title in Clean White */}
       {videoTitle && (
-        <div style={{ fontSize: '0.875rem', color: '#1e293b', marginBottom: '0.65rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-          <Download size={14} color="#2563eb" style={{ flexShrink: 0 }} />
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div className="progress-video-title">
+          <Download size={13} className="progress-title-icon" />
+          <span title={cleanTitle(videoTitle)}>
             {cleanTitle(videoTitle)}
           </span>
         </div>
@@ -117,37 +117,41 @@ export default function DownloadProgress({
 
       {/* Error Message */}
       {isError && (
-        <div style={{ background: '#fef2f2', border: '1px solid #fecaca', padding: '0.65rem 0.75rem', borderRadius: '0.55rem', color: '#b91c1c', fontSize: '0.825rem', marginBottom: '0.5rem' }}>
-          Download failed. Please check the link and connection.
+        <div className="progress-error-box">
+          <AlertCircle size={15} style={{ flexShrink: 0 }} />
+          <span>Download failed. Please check the YouTube link and your connection.</span>
         </div>
       )}
 
       {/* Progress Track */}
       {!isError && (
-        <div className="progress-track" style={{ height: '0.6rem', margin: '0.35rem 0 0.65rem' }}>
+        <div className="studio-progress-track">
           <div
-            className={`progress-fill ${isDownloading && progress === 0 ? 'progress-indeterminate' : ''}`}
+            className={`studio-progress-fill ${isDownloading && progress === 0 ? 'progress-indeterminate' : ''}`}
             style={{ width: `${isSuccess ? 100 : progress}%` }}
           />
         </div>
       )}
 
-      {/* User-Facing Metrics */}
+      {/* High-Contrast Live Metrics (Size, Speed, ETA) */}
       {!isError && isDownloading && (
-        <div className="progress-details" style={{ fontSize: '0.78rem', color: '#64748b' }}>
+        <div className="download-metrics-row">
           {hasValidSize && (
-            <div>
-              Size: <strong style={{ color: '#0f172a' }}>{downloadStats.size}</strong>
+            <div className="metric-pill">
+              <HardDrive size={11} />
+              <span>Size: <strong>{downloadStats.size}</strong></span>
             </div>
           )}
           {downloadStats.speed && (
-            <div>
-              Speed: <strong style={{ color: '#0f172a' }}>{downloadStats.speed}</strong>
+            <div className="metric-pill">
+              <Gauge size={11} />
+              <span>Speed: <strong>{downloadStats.speed}</strong></span>
             </div>
           )}
           {downloadStats.eta && (
-            <div>
-              ETA: <strong style={{ color: '#0f172a' }}>{downloadStats.eta}</strong>
+            <div className="metric-pill">
+              <Clock size={11} />
+              <span>ETA: <strong>{downloadStats.eta}</strong></span>
             </div>
           )}
         </div>

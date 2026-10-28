@@ -130,36 +130,80 @@ export default function VideoGallery({
         </div>
       </div>
 
-      {/* Video Grid or Minimal Dark Empty State */}
+      {/* Videos Grid / Empty State */}
       {filteredAndSortedFiles.length === 0 ? (
-        <div className="empty-state">
+        <div className="gallery-empty-container">
           {searchQuery ? (
-            <p style={{ fontSize: '0.9rem', color: '#94a3b8' }}>
-              No matches for "{searchQuery}".{' '}
+            <div className="gallery-empty-card">
+              <div className="empty-icon-bubble">
+                <Search size={26} color="#ef4444" />
+              </div>
+              <h3 className="empty-title">No matching videos</h3>
+              <p className="empty-desc">
+                No videos match your search term "<strong>{searchQuery}</strong>".
+              </p>
               <button
                 type="button"
                 onClick={() => setSearchQuery('')}
-                style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontWeight: 600 }}
+                className="empty-action-pill"
               >
-                Clear
+                Clear Search
               </button>
-            </p>
+            </div>
           ) : currentTab === 'drafts' ? (
-            <p style={{ fontSize: '0.9rem', color: '#94a3b8' }}>
-              No pre ready shorts. Download a video to auto-create clips.
-            </p>
+            <div className="gallery-empty-card">
+              <div className="empty-icon-bubble bubble-amber">
+                <Clock size={26} color="#f59e0b" />
+              </div>
+              <h3 className="empty-title">No Pre-Ready Shorts Yet</h3>
+              <p className="empty-desc">
+                Download a video to auto-extract viral clips, or select any video from the Downloads tab and click <strong>"Shorts"</strong>.
+              </p>
+              {files.some((f) => f.category === 'downloads') && (
+                <button
+                  type="button"
+                  onClick={() => (setActiveTab ? setActiveTab('downloads') : setLocalTab('downloads'))}
+                  className="empty-action-pill"
+                >
+                  <Download size={13} />
+                  <span>Go to Downloads</span>
+                </button>
+              )}
+            </div>
           ) : currentTab === 'ready' ? (
-            <p style={{ fontSize: '0.9rem', color: '#94a3b8' }}>
-              No shorts ready. Click "Add Text" on pre ready shorts.
-            </p>
+            <div className="gallery-empty-card">
+              <div className="empty-icon-bubble bubble-green">
+                <Sparkles size={26} color="#10b981" />
+              </div>
+              <h3 className="empty-title">No Ready Shorts Yet</h3>
+              <p className="empty-desc">
+                Go to <strong>Pre Ready Shorts</strong>, review the moment, choose your viral hook and channel watermark, then click <strong>"Apply to Video"</strong>.
+              </p>
+              {files.some((f) => f.category === 'drafts') && (
+                <button
+                  type="button"
+                  onClick={() => (setActiveTab ? setActiveTab('drafts') : setLocalTab('drafts'))}
+                  className="empty-action-pill"
+                >
+                  <Clock size={13} />
+                  <span>Review Pre-Ready Shorts</span>
+                </button>
+              )}
+            </div>
           ) : (
-            <p style={{ fontSize: '0.9rem', color: '#94a3b8' }}>
-              No videos downloaded. Paste a link on the left to start.
-            </p>
+            <div className="gallery-empty-card">
+              <div className="empty-icon-bubble bubble-blue">
+                <Download size={26} color="#38bdf8" />
+              </div>
+              <h3 className="empty-title">No Source Videos Downloaded</h3>
+              <p className="empty-desc">
+                Paste any YouTube or Shorts URL on the left panel to begin downloading high-quality 1080p source video.
+              </p>
+            </div>
           )}
         </div>
       ) : (
-        <div className="video-grid">
+        <div className={`video-grid ${currentTab === 'downloads' ? 'grid-landscape' : 'grid-shorts'}`}>
           {filteredAndSortedFiles.map((file, idx) => (
             <VideoCard
               key={`${file.name}-${idx}`}
