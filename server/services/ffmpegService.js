@@ -205,6 +205,131 @@ export async function renderShortsInParallel(moments, videoPath, channelHandle, 
   return generatedFiles;
 }
 
+// Locate Chrome or Edge browser on the machine for pixel-perfect title overlay rendering
+export function getBrowserExecutable() {
+  const candidates = [
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe'
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return null;
+}
+
+// Generate an ultra-high resolution transparent overlay PNG via headless Chrome/Edge
+// This renders true full-color Unicode emojis (🤣, 🤩, etc.), rounded corners, glowing borders,
+// and exact human-designed aesthetics matching the live React preview.
+export async function generateShortsOverlayPng({ topText, channelHandle, outputPath }) {
+  const browserPath = getBrowserExecutable();
+  if (!browserPath) {
+    throw new Error('No Chromium browser found for rendering overlay');
+  }
+
+  const wrappedText = wrapTextForShorts(topText, 28);
+  const safeHandle = channelHandle && channelHandle.trim()
+    ? (channelHandle.trim().startsWith('@') ? channelHandle.trim() : `@${channelHandle.trim()}`)
+    : '';
+
+  const escapeHtml = (str) => (str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+
+  const safeTopHtml = escapeHtml(wrappedText);
+  const safeHandleHtml = escapeHtml(safeHandle);
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    width: 1080px;
+    height: 1920px;
+    background: transparent;
+    position: relative;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  .hook-title-card {
+    position: absolute;
+    top: 270px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.82);
+    border: 3px solid rgba(250, 204, 21, 0.45);
+    border-radius: 20px;
+    padding: 16px 32px;
+    box-shadow: 0 10px 35px rgba(0, 0, 0, 0.9);
+    max-width: 940px;
+    text-align: center;
+    width: max-content;
+  }
+  .hook-title-text {
+    color: #facc15;
+    font-weight: 800;
+    font-size: 46px;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+    word-break: break-word;
+    white-space: pre-line;
+  }
+  .watermark-pill {
+    position: absolute;
+    bottom: 420px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.72);
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    border-radius: 9999px;
+    padding: 12px 28px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.75);
+    color: #ffffff;
+    font-size: 36px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-align: center;
+    width: max-content;
+  }
+</style>
+</head>
+<body>
+  ${safeTopHtml ? `
+  <div class="hook-title-card">
+    <div class="hook-title-text">${safeTopHtml}</div>
+  </div>` : ''}
+
+  ${safeHandleHtml ? `
+  <div class="watermark-pill">
+    ${safeHandleHtml}
+  </div>` : ''}
+</body>
+</html>`;
+
+  const tempHtmlPath = outputPath.replace(/\.png$/i, '.html');
+  fs.writeFileSync(tempHtmlPath, html, 'utf8');
+
+  try {
+    const cmd = `"${browserPath}" --headless=new --disable-gpu --default-background-color=00000000 --screenshot="${outputPath}" --window-size=1080,1920 "file:///${tempHtmlPath.replace(/\\/g, '/')}"`;
+    await new Promise((resolve, reject) => {
+      exec(cmd, (err) => {
+        if (err) return reject(err);
+        resolve();
+      });
+    });
+  } finally {
+    if (fs.existsSync(tempHtmlPath)) {
+      try { fs.unlinkSync(tempHtmlPath); } catch (e) {}
+    }
+  }
+}
+
 // Burn custom top hook text & channel handle to a Short (hookDuration = 0 for whole video)
 export async function burnTextToShort({
   videoPath,
@@ -217,8 +342,9 @@ export async function burnTextToShort({
 }) {
   const tempFilesTracker = [];
   try {
-    const drawFilters = buildDrawTextFilters(topText, channelHandle, tempFilesTracker, hookDuration);
-    if (!drawFilters) {
+    const hasTop = topText && typeof topText === 'string' && topText.trim();
+    const hasHandle = channelHandle && typeof channelHandle === 'string' && channelHandle.trim();
+    if (!hasTop && !hasHandle) {
       throw new Error('Please enter top hook text or a channel watermark to apply.');
     }
 
@@ -228,19 +354,46 @@ export async function burnTextToShort({
       try { meta = JSON.parse(fs.readFileSync(metaPath, 'utf8')); } catch (e) {}
     }
 
+    // Generate high-resolution transparent overlay PNG via headless Chrome/Edge for genuine human design & full-color emojis
+    const overlayPngPath = path.join(DEFAULT_DOWNLOAD_DIR, `overlay_${Date.now()}_${Math.random().toString(36).substring(7)}.png`);
+    tempFilesTracker.push(overlayPngPath);
+
+    let overlaySuccess = false;
+    try {
+      await generateShortsOverlayPng({
+        topText: hasTop ? topText : '',
+        channelHandle: hasHandle ? channelHandle : '',
+        outputPath: overlayPngPath
+      });
+      if (fs.existsSync(overlayPngPath) && fs.statSync(overlayPngPath).size > 1000) {
+        overlaySuccess = true;
+      }
+    } catch (overlayErr) {
+      console.warn('[Overlay] Headless browser overlay failed, using drawtext fallback:', overlayErr.message);
+    }
+
     let ffmpegCmd = '';
     const sourceFound = meta.sourceVideo ? findVideoFile(meta.sourceVideo) : null;
+    const overlayEnable = (hookDuration && hookDuration > 0) ? `:enable='between(t,0,${hookDuration})'` : '';
 
     if (sourceFound && sourceFound.foundPath && fs.existsSync(sourceFound.foundPath) && meta.start && meta.end) {
-      // Clean re-render from pristine source video with 5s retention hook
-      let filterGraph = `split[a][b];[a]scale=180:320:force_original_aspect_ratio=increase,crop=180:320,boxblur=5:2,scale=1080:1920[bg];[b]scale=1080:-1[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2`;
-      if (drawFilters) {
-        filterGraph += `,${drawFilters}`;
+      // Clean re-render from pristine source video
+      if (overlaySuccess) {
+        const filterGraph = `split[a][b];[a]scale=180:320:force_original_aspect_ratio=increase,crop=180:320,boxblur=5:2,scale=1080:1920[bg];[b]scale=1080:-1[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2[base];[base][1:v]overlay=0:0${overlayEnable}`;
+        ffmpegCmd = `ffmpeg -ss ${meta.start} -to ${meta.end} -i "${sourceFound.foundPath}" -i "${overlayPngPath}" -filter_complex "${filterGraph}" -preset ultrafast -c:v libx264 -crf 23 -c:a aac -threads 0 -y "${tempOutputPath}"`;
+      } else {
+        const drawFilters = buildDrawTextFilters(topText, channelHandle, tempFilesTracker, hookDuration);
+        const filterGraph = `split[a][b];[a]scale=180:320:force_original_aspect_ratio=increase,crop=180:320,boxblur=5:2,scale=1080:1920[bg];[b]scale=1080:-1[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,${drawFilters}`;
+        ffmpegCmd = `ffmpeg -ss ${meta.start} -to ${meta.end} -i "${sourceFound.foundPath}" -vf "${filterGraph}" -preset ultrafast -c:v libx264 -crf 23 -c:a aac -threads 0 -y "${tempOutputPath}"`;
       }
-      ffmpegCmd = `ffmpeg -ss ${meta.start} -to ${meta.end} -i "${sourceFound.foundPath}" -vf "${filterGraph}" -preset ultrafast -c:v libx264 -crf 23 -c:a aac -threads 0 -y "${tempOutputPath}"`;
     } else {
-      // Apply 5s retention hook directly onto current video
-      ffmpegCmd = `ffmpeg -i "${videoPath}" -vf "${drawFilters}" -preset ultrafast -c:v libx264 -crf 23 -c:a copy -threads 0 -y "${tempOutputPath}"`;
+      // Apply overlay directly onto current video
+      if (overlaySuccess) {
+        ffmpegCmd = `ffmpeg -i "${videoPath}" -i "${overlayPngPath}" -filter_complex "[0:v][1:v]overlay=0:0${overlayEnable}" -preset ultrafast -c:v libx264 -crf 23 -c:a copy -threads 0 -y "${tempOutputPath}"`;
+      } else {
+        const drawFilters = buildDrawTextFilters(topText, channelHandle, tempFilesTracker, hookDuration);
+        ffmpegCmd = `ffmpeg -i "${videoPath}" -vf "${drawFilters}" -preset ultrafast -c:v libx264 -crf 23 -c:a copy -threads 0 -y "${tempOutputPath}"`;
+      }
     }
 
     await new Promise((resolve, reject) => {
