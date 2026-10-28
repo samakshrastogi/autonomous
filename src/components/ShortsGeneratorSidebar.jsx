@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, X, CheckCircle2, AlertCircle, Clapperboard, Type, Check } from 'lucide-react';
+import { Sparkles, X, CheckCircle2, AlertCircle, Clapperboard, Type, Check, KeyRound, Clock } from 'lucide-react';
 
 export default function ShortsGeneratorSidebar({
   videoFile,
@@ -9,7 +9,8 @@ export default function ShortsGeneratorSidebar({
   isProcessing = false,
   error = '',
   onClose,
-  onReviewGeneratedShort
+  onReviewGeneratedShort,
+  onOpenApiKeyModal
 }) {
   // If not processing and no moments or shorts, don't show
   if (!isProcessing && !error && (!generatedShorts || generatedShorts.length === 0) && (!discoveredMoments || discoveredMoments.length === 0)) {
@@ -40,6 +41,35 @@ export default function ShortsGeneratorSidebar({
     activeStep = 2;
   } else {
     activeStep = 1;
+  }
+
+  // Intelligent error classification & user-friendly copy
+  const isQuotaError = Boolean(
+    error && (
+      error.toLowerCase().includes('quota') ||
+      error.includes('429') ||
+      error.toLowerCase().includes('resourceexhausted') ||
+      error.toLowerCase().includes('rate limit')
+    )
+  );
+
+  const isAuthError = Boolean(
+    error && (
+      error.includes('API_KEY_INVALID') ||
+      error.toLowerCase().includes('api key not valid') ||
+      error.toLowerCase().includes('unauthorized') ||
+      error.includes('401') ||
+      error.includes('403')
+    )
+  );
+
+  // Extract retry seconds if present in error message
+  let retrySeconds = null;
+  if (isQuotaError && error) {
+    const match = error.match(/retry in ([\d\.]+)s/i) || error.match(/resets in ~?(\d+)s/i);
+    if (match) {
+      retrySeconds = Math.ceil(parseFloat(match[1]));
+    }
   }
 
   return (
@@ -132,11 +162,75 @@ export default function ShortsGeneratorSidebar({
         </div>
       )}
 
-      {/* Error Alert */}
+      {/* Error Alert - Clean, Human-Friendly & Zero UI Overflow */}
       {error && (
         <div className="sidebar-error-box compact">
-          <AlertCircle size={15} style={{ flexShrink: 0 }} />
-          <span>{error || 'AI analysis failed. Please check connection.'}</span>
+          <div className="sidebar-error-header">
+            <AlertCircle size={15} color="#ef4444" style={{ flexShrink: 0 }} />
+            <span>
+              {isQuotaError
+                ? 'Gemini Free Quota Limit Reached'
+                : isAuthError
+                ? 'Invalid Gemini API Key'
+                : 'AI Generation Failed'}
+            </span>
+          </div>
+
+          <p className="sidebar-error-msg">
+            {isQuotaError ? (
+              <>
+                Free tier is limited to 15 requests/min. Quota resets automatically{' '}
+                <strong style={{ color: '#38bdf8' }}>
+                  {retrySeconds ? `in ~${retrySeconds}s` : 'every 60 seconds'}
+                </strong>{' '}
+                (daily quota resets at midnight PT).
+              </>
+            ) : isAuthError ? (
+              'The Gemini API key is missing or invalid. Please update your key to continue.'
+            ) : (
+              error.length > 130 ? `${error.slice(0, 130)}...` : error
+            )}
+          </p>
+
+          <div className="sidebar-error-actions">
+            {(isQuotaError || isAuthError) && onOpenApiKeyModal && (
+              <button
+                type="button"
+                onClick={onOpenApiKeyModal}
+                className="sidebar-error-btn-primary"
+              >
+                <KeyRound size={12} />
+                <span>Switch / Change Key</span>
+              </button>
+            )}
+
+            {isQuotaError && (
+              <div className="sidebar-error-pill-timer">
+                <Clock size={11} />
+                <span>Resets ~60s</span>
+              </div>
+            )}
+
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="sidebar-error-btn-ghost"
+              >
+                Dismiss
+              </button>
+            )}
+          </div>
+
+          {/* Collapsible raw technical details with zero overflow */}
+          {error && (
+            <details className="sidebar-error-details-toggle">
+              <summary>View technical error details</summary>
+              <div className="sidebar-error-code-block">
+                {error}
+              </div>
+            </details>
+          )}
         </div>
       )}
 

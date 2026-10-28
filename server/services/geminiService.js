@@ -148,10 +148,20 @@ Return ONLY a valid JSON array of objects with the exact schema:
       } catch (err) {
         console.warn(`[Gemini] Model ${modelName} returned: ${err.message}`);
         lastError = err;
+        // If quota or rate limit is hit (429 / ResourceExhausted), stop hammering subsequent models
+        if (err.message && (err.message.includes('429') || err.message.toLowerCase().includes('quota') || err.message.toLowerCase().includes('resourceexhausted'))) {
+          console.warn('[Gemini] Free tier quota/rate limit reached. Stopping model fallback attempts.');
+          break;
+        }
       }
     }
 
     if (!responseText && lastError) {
+      if (lastError.message && (lastError.message.includes('429') || lastError.message.toLowerCase().includes('quota') || lastError.message.toLowerCase().includes('resourceexhausted'))) {
+        const retryMatch = lastError.message.match(/retry in ([\d\.]+)s/i);
+        const retrySec = retryMatch ? Math.ceil(parseFloat(retryMatch[1])) : 60;
+        throw new Error(`QUOTA_LIMIT: Gemini Free Tier quota reached (15 req/min). Resets in ~${retrySec}s. Please wait 1 minute or switch API key.`);
+      }
       throw lastError;
     }
 

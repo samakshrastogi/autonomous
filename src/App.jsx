@@ -485,6 +485,7 @@ export default function App() {
                 setShortsError('');
               }}
               onReviewGeneratedShort={handleReviewFromGenerator}
+              onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
             />
           </div>
 

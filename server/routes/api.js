@@ -230,7 +230,15 @@ router.post('/generate-shorts', async (req, res) => {
 
   } catch (err) {
     console.error('[Shorts Generation Error]:', err);
-    sendEvent('error', { message: err.message });
+    let userMsg = err.message || 'AI shorts generation failed.';
+    if (userMsg.includes('QUOTA_LIMIT')) {
+      // Clean quota message
+    } else if (userMsg.includes('429') || userMsg.toLowerCase().includes('quota') || userMsg.includes('ResourceExhausted')) {
+      const retryMatch = userMsg.match(/retry in ([\d\.]+)s/i);
+      const retrySec = retryMatch ? Math.ceil(parseFloat(retryMatch[1])) : 60;
+      userMsg = `QUOTA_LIMIT: Gemini Free Tier quota reached (15 req/min). Resets in ~${retrySec}s. Please wait a moment or switch your API key.`;
+    }
+    sendEvent('error', { message: userMsg, raw: err.message });
     res.end();
   }
 });
