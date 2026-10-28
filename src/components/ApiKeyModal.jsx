@@ -43,7 +43,7 @@ export default function ApiKeyModal({ isOpen, onClose, apiKey, onSaveApiKey }) {
     setTimeout(() => {
       setSavedSuccess(false);
       onClose();
-    }, 500);
+    }, 450);
   };
 
   const handleEditClick = (e) => {
@@ -67,13 +67,19 @@ export default function ApiKeyModal({ isOpen, onClose, apiKey, onSaveApiKey }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-content glass-dialog" onClick={(e) => e.stopPropagation()}>
+        {/* Modal Header */}
         <div className="modal-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Key size={18} color="#ef4444" />
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a' }}>
-              Gemini API Key
-            </h3>
+          <div className="modal-header-brand">
+            <div className="modal-icon-badge amber-badge">
+              <Key size={18} />
+            </div>
+            <div>
+              <h3 className="modal-title-glow">Gemini API Key</h3>
+              <p className="modal-subtitle-glow">
+                Used to find viral scenes and create 9:16 Shorts
+              </p>
+            </div>
           </div>
           <button
             type="button"
@@ -81,114 +87,97 @@ export default function ApiKeyModal({ isOpen, onClose, apiKey, onSaveApiKey }) {
             className="modal-close-btn"
             title="Close (Esc)"
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         </div>
 
-        <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '1rem', lineHeight: 1.45 }}>
-          Enter your Google Gemini API key to analyze videos and automatically generate viral 9:16 Shorts with Hinglish titles.
-        </p>
-
         {/* Saved status notification */}
         {apiKey && !isEditing && (
-          <div style={{
-            background: '#f0fdf4',
-            border: '1px solid #bbf7d0',
-            borderRadius: '0.55rem',
-            padding: '0.5rem 0.75rem',
-            marginBottom: '0.85rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.45rem',
-            fontSize: '0.8rem',
-            color: '#15803d',
-            fontWeight: 500
-          }}>
-            <Check size={14} color="#16a34a" />
-            <span>API Key is saved and active</span>
+          <div className="saved-status-badge">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+              <Check size={14} color="#34d399" />
+              <span>API Key is active</span>
+            </div>
+            <span className="badge-pill-green">CONNECTED</span>
           </div>
         )}
 
         <form onSubmit={handleSave}>
-          {/* Integrated, perfectly aligned key input box */}
-          <div className="key-input-wrapper" style={{ marginBottom: '1.15rem' }}>
-            <input
-              type={showPassword ? 'text' : 'password'}
-              className="key-input-field"
-              placeholder="AIzaSy..."
-              value={isEditing ? inputValue : getMaskedKey(inputValue)}
-              onChange={handleInputChange}
-              readOnly={!isEditing}
-              autoFocus={isEditing}
-            />
+          <div className="input-group-styled">
+            <label className="input-label-styled">
+              <span>API Key</span>
+              <a
+                href="https://aistudio.google.com/app/apikey"
+                target="_blank"
+                rel="noreferrer"
+                className="get-key-link"
+              >
+                <span>Get Free Key</span>
+                <ExternalLink size={11} />
+              </a>
+            </label>
 
-            <button
-              type="button"
-              className="key-eye-btn"
-              title={showPassword ? 'Hide key' : 'Show key'}
-              onClick={() => setShowPassword(!showPassword)}
-            >
-              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          </div>
+            <div className="glass-input-wrapper">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                className="glass-text-input"
+                placeholder="AIzaSy..."
+                value={isEditing ? inputValue : getMaskedKey(inputValue)}
+                onChange={handleInputChange}
+                readOnly={!isEditing}
+                autoFocus={isEditing}
+                spellCheck="false"
+                autoComplete="off"
+              />
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <a
-              href="https://aistudio.google.com/app/apikey"
-              target="_blank"
-              rel="noreferrer"
-              style={{
-                fontSize: '0.8rem',
-                color: '#2563eb',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.3rem',
-                textDecoration: 'none',
-                fontWeight: 500
-              }}
-            >
-              <span>Get Free Gemini Key</span>
-              <ExternalLink size={12} />
-            </a>
-
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
               <button
                 type="button"
-                onClick={onClose}
-                className="action-btn-subtle"
-                style={{ padding: '0.45rem 0.85rem', fontSize: '0.825rem' }}
+                className="key-eye-btn"
+                title={showPassword ? 'Hide key' : 'Show key'}
+                onClick={() => setShowPassword(!showPassword)}
               >
-                Cancel
+                {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
               </button>
-
-              {!isEditing && apiKey ? (
-                <button
-                  type="button"
-                  onClick={handleEditClick}
-                  className="btn-secondary"
-                  style={{ padding: '0.45rem 0.95rem', fontSize: '0.825rem', gap: '0.4rem' }}
-                >
-                  <Edit3 size={13} />
-                  <span>Edit Key</span>
-                </button>
-              ) : (
-                <button
-                  type="submit"
-                  className="btn-primary"
-                  style={{ padding: '0.45rem 1.15rem', fontSize: '0.825rem' }}
-                  disabled={!inputValue.trim()}
-                >
-                  {savedSuccess ? (
-                    <>
-                      <Check size={15} />
-                      <span>Saved!</span>
-                    </>
-                  ) : (
-                    'Save Key'
-                  )}
-                </button>
-              )}
             </div>
+          </div>
+
+          <div className="modal-actions-bar">
+            <button
+              type="button"
+              onClick={onClose}
+              className="action-btn-subtle"
+            >
+              Cancel
+            </button>
+
+            {!isEditing && apiKey ? (
+              <button
+                type="button"
+                onClick={handleEditClick}
+                className="btn-glass-primary"
+              >
+                <Edit3 size={14} />
+                <span>Edit Key</span>
+              </button>
+            ) : (
+              <button
+                type="submit"
+                className="btn-glow-amber"
+                disabled={!inputValue.trim()}
+              >
+                {savedSuccess ? (
+                  <>
+                    <Check size={15} />
+                    <span>Saved!</span>
+                  </>
+                ) : (
+                  <>
+                    <Check size={15} />
+                    <span>Save Key</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </form>
       </div>

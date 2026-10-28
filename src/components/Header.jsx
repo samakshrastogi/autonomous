@@ -25,7 +25,7 @@ export default function Header({
           className="header-glass-pill pill-channel"
           title="Channel Username"
         >
-          <AtSign size={13} color="#60a5fa" />
+          <AtSign size={13} color="#38bdf8" />
           <span>{channelHandle || '@AddChannel'}</span>
         </button>
 
