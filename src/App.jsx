@@ -143,6 +143,8 @@ export default function App() {
       }
 
       await fetchRecentFiles();
+      // Brief pause so user sees 100% completion in modal before switching to Shorts tab
+      await new Promise((r) => setTimeout(r, 700));
       setIsReviewModalOpen(false);
       // Auto-switch to Shorts tab!
       setActiveTab('ready');

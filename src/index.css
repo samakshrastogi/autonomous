@@ -666,9 +666,10 @@ body {
 }
 
 .progress-indeterminate {
-  background: linear-gradient(90deg, #ef4444, #fb923c, #ef4444);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite linear;
+  background: linear-gradient(90deg, #ef4444 0%, #fb923c 25%, #facc15 50%, #fb923c 75%, #ef4444 100%) !important;
+  background-size: 200% 100% !important;
+  animation: shimmer 1.2s infinite linear !important;
+  box-shadow: 0 0 12px rgba(249, 115, 22, 0.6) !important;
 }
 
 @keyframes shimmer {
@@ -2310,20 +2311,189 @@ body {
 }
 
 .review-processing-card {
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.25);
-  border-radius: 0.65rem;
-  padding: 0.75rem 0.9rem;
-  margin-bottom: 1rem;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(249, 115, 22, 0.08) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  box-shadow: 0 4px 20px rgba(239, 68, 68, 0.15);
+  border-radius: 0.85rem;
+  padding: 1rem 1.15rem;
+  margin-bottom: 1.15rem;
+  position: relative;
+  overflow: hidden;
+  animation: fadeIn 0.25s ease-out;
+  transition: all 0.3s ease;
 }
 
-.review-processing-status {
+.review-processing-card.success-card {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.1) 100%);
+  border-color: rgba(16, 185, 129, 0.45);
+  box-shadow: 0 4px 24px rgba(16, 185, 129, 0.2);
+}
+
+.review-processing-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.35rem;
+}
+
+.review-processing-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.review-stage-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  background: rgba(239, 68, 68, 0.22);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.review-processing-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.review-meta-pills {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.825rem;
-  color: #f87171;
+}
+
+.review-progress-pct {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #fb923c;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 10px rgba(251, 146, 60, 0.4);
+}
+
+.review-timer-pill {
+  font-size: 0.75rem;
   font-weight: 600;
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.15rem 0.45rem;
+  border-radius: 0.35rem;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.review-processing-desc {
+  font-size: 0.8rem;
+  color: #cbd5e1;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* Custom Live Progress Track & Flowing Bar */
+.review-progress-track {
+  width: 100%;
+  height: 9px;
+  background: rgba(15, 23, 42, 0.75);
+  border-radius: 9999px;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.review-progress-bar {
+  height: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #ef4444 0%, #f97316 45%, #fbbf24 85%, #f97316 100%);
+  background-size: 200% 100%;
+  animation: progressFlow 2s linear infinite;
+  box-shadow: 0 0 14px rgba(249, 115, 22, 0.8);
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.review-progress-bar.success-bar {
+  background: linear-gradient(90deg, #10b981 0%, #34d399 100%);
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.8);
+}
+
+.review-progress-bar::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 14px;
+  background: #ffffff;
+  border-radius: 9999px;
+  box-shadow: 0 0 10px #ffffff, 0 0 20px #fb923c;
+  opacity: 0.85;
+  animation: pulseGlow 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes progressFlow {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+@keyframes pulseGlow {
+  0% { opacity: 0.35; transform: scaleX(0.8); }
+  100% { opacity: 0.95; transform: scaleX(1.2); }
+}
+
+/* 5 Phase Progress Dots */
+.review-stage-dots {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.65rem;
+  padding: 0 0.15rem;
+}
+
+.review-stage-dot-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.review-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  transition: all 0.3s ease;
+}
+
+.review-dot.active {
+  background: #fb923c;
+  box-shadow: 0 0 10px #f97316;
+  transform: scale(1.35);
+}
+
+.review-dot.completed {
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
+}
+
+.review-dot-label {
+  font-size: 0.68rem;
+  color: #64748b;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.review-dot-label.active {
+  color: #fb923c;
+  font-weight: 700;
+}
+
+.review-dot-label.completed {
+  color: #34d399;
 }
 
 .review-actions-bar {
