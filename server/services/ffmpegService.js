@@ -25,20 +25,57 @@ export function formatSecondsToTimestamp(totalSec) {
     : `00:${pad(minutes)}:${pad(seconds)}`;
 }
 
+// Smart text wrapper for 9:16 Shorts title hook to match preview wrap format
+export function wrapTextForShorts(text, maxCharsPerLine = 28) {
+  if (!text || typeof text !== 'string') return '';
+  const lines = text.trim().split(/\r?\n/);
+  const wrappedLines = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const words = trimmed.split(/\s+/);
+    let currentLine = '';
+
+    for (const word of words) {
+      if (!currentLine) {
+        currentLine = word;
+      } else {
+        const testLine = `${currentLine} ${word}`;
+        if (testLine.length <= maxCharsPerLine) {
+          currentLine = testLine;
+        } else {
+          wrappedLines.push(currentLine);
+          currentLine = word;
+        }
+      }
+    }
+    if (currentLine) {
+      wrappedLines.push(currentLine);
+    }
+  }
+
+  return wrappedLines.join('\n');
+}
+
 // Helper: Build FFmpeg drawtext filter graph using UTF-8 text files
 // hookDuration: Number of seconds the retention hook is active at the start. 0 = visible across the whole video (default: 0)
 export function buildDrawTextFilters(topText, bottomText, tempFilesTracker, hookDuration = 0) {
   const filters = [];
-  const fontPath = '/Windows/Fonts/arialbd.ttf';
+  // Use Windows Segoe UI Emoji font to render full emojis without missing box glyphs
+  const fontPath = fs.existsSync('C:/Windows/Fonts/seguiemj.ttf')
+    ? '/Windows/Fonts/seguiemj.ttf'
+    : '/Windows/Fonts/arialbd.ttf';
 
   if (topText && typeof topText === 'string' && topText.trim()) {
-    const safeTop = topText.trim();
+    // Wrap text into clean multi-line format matching the live editing preview (2-3 lines max, centered)
+    const wrappedTop = wrapTextForShorts(topText, 28);
     const topFile = path.join(DEFAULT_DOWNLOAD_DIR, `temp_txt_top_${Date.now()}_${Math.random().toString(36).substring(7)}.txt`);
-    fs.writeFileSync(topFile, safeTop, 'utf8');
+    fs.writeFileSync(topFile, wrappedTop, 'utf8');
     tempFilesTracker.push(topFile);
     const normalizedPath = topFile.replace(/\\/g, '/').replace(/^([A-Za-z]):/, '');
     const durationFilter = (hookDuration && hookDuration > 0) ? `:enable='between(t,0,${hookDuration})'` : '';
-    filters.push(`drawtext=fontfile='${fontPath}':textfile='${normalizedPath}':expansion=none:fontsize=46:line_spacing=12:fontcolor=yellow:box=1:boxcolor=black@0.70:boxborderw=18:x=(w-text_w)/2:y=280${durationFilter}`);
+    filters.push(`drawtext=fontfile='${fontPath}':textfile='${normalizedPath}':expansion=none:fontsize=48:line_spacing=16:text_align=C:fontcolor=yellow:borderw=2:bordercolor=black@0.8:box=1:boxcolor=black@0.75:boxborderw=20:x=(w-text_w)/2:y=280${durationFilter}`);
   }
 
   if (bottomText && typeof bottomText === 'string' && bottomText.trim()) {
@@ -50,7 +87,7 @@ export function buildDrawTextFilters(topText, bottomText, tempFilesTracker, hook
     fs.writeFileSync(botFile, cleanHandle, 'utf8');
     tempFilesTracker.push(botFile);
     const normalizedPath = botFile.replace(/\\/g, '/').replace(/^([A-Za-z]):/, '');
-    filters.push(`drawtext=fontfile='${fontPath}':textfile='${normalizedPath}':expansion=none:fontsize=38:fontcolor=white:box=1:boxcolor=black@0.55:boxborderw=14:x=(w-text_w)/2:y=1460`);
+    filters.push(`drawtext=fontfile='${fontPath}':textfile='${normalizedPath}':expansion=none:fontsize=38:line_spacing=10:text_align=C:fontcolor=white:box=1:boxcolor=black@0.55:boxborderw=14:x=(w-text_w)/2:y=1460`);
   }
 
   return filters.join(',');
