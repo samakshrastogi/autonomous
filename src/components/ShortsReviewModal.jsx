@@ -201,12 +201,6 @@ export default function ShortsReviewModal({
                   <div className="review-hook-badge">
                     {topText}
                   </div>
-                  {currentTime <= 5.0 && !isPaused && !isEditingHook && (
-                    <div className="hook-timer-indicator">
-                      <Clock size={10} />
-                      <span>{Math.max(0, 5 - Math.floor(currentTime))}s hook</span>
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -225,6 +219,13 @@ export default function ShortsReviewModal({
                 <span className="live-dot-pulse"></span>
                 <span>9:16 Live Preview</span>
               </div>
+
+              {currentTime <= 5.0 && !isPaused && topText.trim() && (
+                <div className="preview-hook-live-indicator">
+                  <Clock size={11} color="#facc15" />
+                  <span>5s Hook ({Math.max(0, 5 - Math.floor(currentTime))}s)</span>
+                </div>
+              )}
 
               {currentTime > 5.0 && (
                 <button
