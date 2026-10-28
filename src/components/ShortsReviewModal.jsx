@@ -195,9 +195,9 @@ export default function ShortsReviewModal({
                 onPlay={() => setIsPaused(false)}
               />
 
-              {/* Live Overlay: Top Hook / Title (Active for first 5s or while editing/paused) */}
-              {topText.trim() && (currentTime <= 5.0 || isPaused || isEditingHook) && (
-                <div className={`review-top-text-overlay ${currentTime > 5.0 ? 'preview-dimmed' : ''}`}>
+              {/* Live Overlay: Top Hook / Title (Active for whole video) */}
+              {topText.trim() && (
+                <div className="review-top-text-overlay">
                   <div className="review-hook-badge">
                     {topText}
                   </div>
@@ -220,28 +220,11 @@ export default function ShortsReviewModal({
                 <span>9:16 Live Preview</span>
               </div>
 
-              {currentTime <= 5.0 && !isPaused && topText.trim() && (
+              {topText.trim() && (
                 <div className="preview-hook-live-indicator">
-                  <Clock size={11} color="#facc15" />
-                  <span>5s Hook ({Math.max(0, 5 - Math.floor(currentTime))}s)</span>
+                  <Sparkles size={11} color="#facc15" />
+                  <span>Hook Active (Whole Video)</span>
                 </div>
-              )}
-
-              {currentTime > 5.0 && (
-                <button
-                  type="button"
-                  className="preview-rewind-hook-btn"
-                  onClick={() => {
-                    if (videoRef.current) {
-                      videoRef.current.currentTime = 0;
-                      videoRef.current.play();
-                    }
-                  }}
-                  title="Rewind to 0:00 to see 5s retention hook"
-                >
-                  <RotateCcw size={11} />
-                  <span>Replay 5s Hook</span>
-                </button>
               )}
             </div>
           </div>
@@ -261,12 +244,12 @@ export default function ShortsReviewModal({
               <div className="review-field-header">
                 <label className="review-field-label">
                   <span className="dot-indicator" style={{ background: '#eab308' }}></span>
-                  <span>Retention Hook (First 5 Seconds)</span>
+                  <span>Retention Hook & Title (Whole Video)</span>
                 </label>
-                <span className="review-tag-gold">5s Hook</span>
+                <span className="review-tag-gold">Full Video Hook</span>
               </div>
               <p style={{ fontSize: '0.72rem', color: '#94a3b8', margin: '0 0 0.45rem', lineHeight: 1.35 }}>
-                Displays for the first 5 seconds to excite viewers and skyrocket retention, then disappears.
+                Displays throughout the entire video to keep viewers engaged and maximize retention from 0s to the end.
               </p>
 
               <textarea
@@ -274,7 +257,7 @@ export default function ShortsReviewModal({
                 onChange={(e) => setTopText(e.target.value)}
                 onFocus={() => setIsEditingHook(true)}
                 onBlur={() => setIsEditingHook(false)}
-                placeholder="Type viral retention hook, or choose a Gemini suggestion below..."
+                placeholder="Type viral hook / title, or choose a Gemini suggestion below..."
                 rows={2}
                 disabled={isProcessing}
                 className="review-textarea"
@@ -310,10 +293,6 @@ export default function ShortsReviewModal({
                         className={`review-chip-btn ${isSelected ? 'active-chip' : ''}`}
                         onClick={() => {
                           setTopText(hook);
-                          if (videoRef.current && currentTime > 5) {
-                            videoRef.current.currentTime = 0;
-                            videoRef.current.play();
-                          }
                         }}
                         title="Click to apply to video"
                       >

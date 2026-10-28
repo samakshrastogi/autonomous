@@ -26,8 +26,8 @@ export function formatSecondsToTimestamp(totalSec) {
 }
 
 // Helper: Build FFmpeg drawtext filter graph using UTF-8 text files
-// hookDuration: Number of seconds the retention hook is active at the start (default 5s)
-export function buildDrawTextFilters(topText, bottomText, tempFilesTracker, hookDuration = 5) {
+// hookDuration: Number of seconds the retention hook is active at the start. 0 = visible across the whole video (default: 0)
+export function buildDrawTextFilters(topText, bottomText, tempFilesTracker, hookDuration = 0) {
   const filters = [];
   const fontPath = '/Windows/Fonts/arialbd.ttf';
 
@@ -168,18 +168,19 @@ export async function renderShortsInParallel(moments, videoPath, channelHandle, 
   return generatedFiles;
 }
 
-// Burn custom top hook text (for 5s) & channel handle to a Short
+// Burn custom top hook text & channel handle to a Short (hookDuration = 0 for whole video)
 export async function burnTextToShort({
   videoPath,
   filename,
   topText,
   channelHandle,
   tempOutputPath,
-  finalReadyPath
+  finalReadyPath,
+  hookDuration = 0
 }) {
   const tempFilesTracker = [];
   try {
-    const drawFilters = buildDrawTextFilters(topText, channelHandle, tempFilesTracker, 5);
+    const drawFilters = buildDrawTextFilters(topText, channelHandle, tempFilesTracker, hookDuration);
     if (!drawFilters) {
       throw new Error('Please enter top hook text or a channel watermark to apply.');
     }

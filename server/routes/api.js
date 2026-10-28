@@ -250,7 +250,7 @@ router.post('/suggest-hooks', async (req, res) => {
 
 // Burn custom top hook text (for 5s) & channel handle
 router.post('/burn-text', async (req, res) => {
-  const { filename, topText, channelHandle } = req.body;
+  const { filename, topText, channelHandle, hookDuration = 0 } = req.body;
   if (!filename) {
     return res.status(400).json({ error: 'Filename is required' });
   }
@@ -270,7 +270,8 @@ router.post('/burn-text', async (req, res) => {
       topText,
       channelHandle,
       tempOutputPath,
-      finalReadyPath
+      finalReadyPath,
+      hookDuration: Number(hookDuration) || 0
     });
 
     broadcastFilesUpdate();
