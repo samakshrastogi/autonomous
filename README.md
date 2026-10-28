@@ -1,66 +1,91 @@
-# YouTube Quick Downloader
+# AI Shorts Studio
 
-A clean, minimalist React web app with a zero-database local server that automatically downloads YouTube videos and Shorts using `yt-dlp` directly into your Windows folder.
+A high-performance Creator Studio web application that automatically downloads videos via `yt-dlp`, uses Google Gemini AI to detect genuinely viral micro-moments (< 40s), and renders 9:16 vertical video clips in parallel with customizable 5-second retention hooks and channel watermarks.
 
 ---
 
 ## ⚡ Features
 
-- **Instant Auto-Download on Paste**: Simply paste any YouTube link (`Ctrl+V` or click Paste), and the download starts automatically.
-- **Exact Command Configuration**:
-  ```powershell
-  yt-dlp -f "bv*+ba/b" --merge-output-format mp4 -o "%(title)s.%(ext)s" "<url>"
-  ```
-- **Target Folder**:
-  Downloads are automatically placed in:
-  ```powershell
-  C:\Users\Samaksh Rastogi\downloads\videos
-  ```
-- **Live Real-Time Progress**:
-  - Live progress percentage bar
-  - Download speed & ETA stats
-  - Merging indicator
-  - Collapsible terminal viewer showing live `yt-dlp` stdout logs
-- **One-Click Folder Access**:
-  - "Open Folder" button instantly launches Windows File Explorer right in `C:\Users\Samaksh Rastogi\downloads\videos`
-- **Recent Downloads History**:
-  - Displays all videos in your target folder with file sizes and timestamps.
-- **Zero Database Required**:
-  - Lightweight and fast without any SQL/MongoDB overhead.
+- **Liquid Glass Dark Mode UI**: Modern dark glassmorphism design with responsive 3-way toggle (`Downloads`, `Pre Ready Shorts`, `Shorts`).
+- **Instant Auto-Download on Paste**: Paste any video link (`Ctrl+V` or click Paste) and downloading begins automatically.
+- **Genuine AI Viral Shorts Detection**: Analyzes audio and detects self-contained micro-story scenes (Setup $\to$ Escalation $\to$ Climax/Punchline) strictly under 40 seconds.
+- **Multi-Core Parallel Rendering**: Multi-worker FFmpeg encoding pool ($2.5\times - 3.5\times$ faster rendering).
+- **5-Second Retention Hooks**: Hooks viewer attention during the critical first 5 seconds ($0 \le t \le 5\text{s}$) and automatically vanishes so the rest of the clip plays clean.
+- **5 Gemini Hook Suggestions**: Automatically generates the 5 best conversational Hinglish hooks with emojis for every clip.
+- **Real-Time Disk Sync (`chokidar`)**: Zero polling or manual refreshing needed; changes on disk instantly update the UI over persistent Server-Sent Events (SSE).
+- **3-Tier Organized Directory**:
+  - `01_Downloads`: Pristine full-length downloaded source videos.
+  - `02_Shorts_Drafts`: Clean 9:16 vertical shorts (Pre-Ready) without burned text.
+  - `03_Shorts_Ready`: Final branded shorts with 5s retention hooks and channel watermarks.
 
 ---
 
-## 🚀 Quick Start
+## 🚀 How to Run the Project
 
-### 1. Start the App
+### Prerequisites
+Make sure the following are installed and accessible in your system's `PATH`:
+1. **Node.js** (v18 or higher) — [nodejs.org](https://nodejs.org/)
+2. **FFmpeg** — [ffmpeg.org](https://ffmpeg.org/) (for video slicing, vertical conversion & text filters)
+3. **yt-dlp** — [github.com/yt-dlp/yt-dlp](https://github.com/yt-dlp/yt-dlp) (for downloading videos)
 
-You have two easy ways to run the project:
+---
 
-#### Option A: Single Command (Production Server)
+### Step-by-Step Running Instructions
+
+#### 1. Install Dependencies (First time only)
+Open terminal in the project directory:
+```powershell
+npm install
+```
+
+#### 2. Run the Application
+
+You can run the app in either **Production Mode** (recommended) or **Development Mode**:
+
+##### Option A: Production Mode (Fastest & Single Command)
 ```powershell
 npm start
 ```
-Open **[http://localhost:5001](http://localhost:5001)** in your browser.
+- Starts the modular backend server and serves the optimized production build.
+- Open your browser at: **[http://localhost:5001](http://localhost:5001)**
 
-#### Option B: Development Mode (Vite Hot-Reload)
+##### Option B: Development Mode (With Hot-Reload)
 ```powershell
 npm run dev
 ```
-Open **[http://localhost:3000](http://localhost:3000)** in your browser.
+- Concurrently runs the backend server (port 5001) and Vite live dev server (port 3000).
+- Open your browser at: **[http://localhost:3000](http://localhost:3000)**
 
 ---
 
-## 📂 Project Structure
+### 🔑 Setting Up Your Gemini API Key
+
+You can configure your Gemini API Key in either of two ways:
+1. **In the Web UI**: Click the **AI Key** / **AI Connected** pill in the top navbar and paste your key.
+2. **In `.env` File**: Add the following line in `.env` in the root folder:
+   ```env
+   GEMINI_API_KEY=your_gemini_api_key_here
+   ```
+
+---
+
+### 📂 Directory Architecture
 
 ```
 c:\src\autonomous\
-├── server.js            # Lightweight Express backend (executes yt-dlp, streams SSE progress)
-├── vite.config.js       # Vite configuration with proxy to local server
-├── index.html           # HTML entry point
-├── package.json         # Scripts & dependencies
-├── src/
-│   ├── main.jsx         # React root
-│   ├── App.jsx          # UI component (Auto-download, progress bar, folder opener)
-│   └── index.css        # Clean dark-mode styles & animations
-└── dist/                # Pre-built production frontend
+├── server.js                        # Lean Express entry point (42 lines)
+├── server/
+│   ├── config.js                    # Storage folders & video scanner
+│   ├── watcher.js                   # Chokidar real-time disk event watcher
+│   ├── routes/
+│   │   └── api.js                   # REST & SSE API endpoints
+│   └── services/
+│       ├── geminiService.js         # Gemini AI analysis & hook generation
+│       ├── ffmpegService.js         # Parallel render pool & 5s retention hook filters
+│       └── downloadService.js       # yt-dlp process manager & stream parser
+├── src/                             # React frontend (Vite)
+│   ├── App.jsx                      # Main dashboard & real-time SSE listener
+│   ├── index.css                    # Dark glassmorphism styles
+│   └── components/                  # UI components & lazy-loaded modals
+└── dist/                            # Production web build
 ```
