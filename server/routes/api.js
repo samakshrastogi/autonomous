@@ -11,7 +11,7 @@ import {
 } from '../config.js';
 import { registerEventsClient, broadcastFilesUpdate } from '../watcher.js';
 import { analyzeVideoAudioForShorts, generateSuggestedHooks } from '../services/geminiService.js';
-import { renderShortsInParallel, burnTextToShort } from '../services/ffmpegService.js';
+import { renderShortsInParallel, burnTextToShort, sanitizeShortsFilename } from '../services/ffmpegService.js';
 import { startVideoDownload } from '../services/downloadService.js';
 
 const router = express.Router();
@@ -260,13 +260,20 @@ router.post('/burn-text', async (req, res) => {
     return res.status(404).json({ error: 'Video file not found on disk' });
   }
 
+  // Determine final ready filename based on chosen title/hook
+  const baseFallback = path.basename(filename, path.extname(filename));
+  const destinationFilename = (topText && typeof topText === 'string' && topText.trim())
+    ? sanitizeShortsFilename(topText.trim(), baseFallback)
+    : filename;
+
   const tempOutputPath = path.join(FOLDERS.SHORTS_READY, `temp_burn_${Date.now()}.mp4`);
-  const finalReadyPath = path.join(FOLDERS.SHORTS_READY, filename);
+  const finalReadyPath = path.join(FOLDERS.SHORTS_READY, destinationFilename);
 
   try {
     const result = await burnTextToShort({
       videoPath: fileInfo.foundPath,
-      filename,
+      filename: destinationFilename,
+      originalFilename: filename,
       topText,
       channelHandle,
       tempOutputPath,

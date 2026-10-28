@@ -25,6 +25,28 @@ export function formatSecondsToTimestamp(totalSec) {
     : `00:${pad(minutes)}:${pad(seconds)}`;
 }
 
+// Sanitize chosen hook or title into a clean, valid video filename for Shorts Ready
+export function sanitizeShortsFilename(rawTitle, fallbackName = 'Short') {
+  if (!rawTitle || typeof rawTitle !== 'string') return `${fallbackName}.mp4`;
+  let clean = rawTitle
+    .replace(/^Short\s*[-–—:]\s*/i, '')
+    .replace(/[\\/:*?"<>|]/g, '')
+    .replace(/#shorts/gi, '')
+    .replace(/\bshorts\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[. ]+$/, '');
+
+  if (clean.length > 90) {
+    clean = clean.substring(0, 90).trim().replace(/[. ]+$/, '');
+  }
+  if (!clean) clean = fallbackName;
+  if (!clean.toLowerCase().endsWith('.mp4')) {
+    clean += '.mp4';
+  }
+  return clean;
+}
+
 // Smart text wrapper for 9:16 Shorts title hook to match preview wrap format
 export function wrapTextForShorts(text, maxCharsPerLine = 28) {
   if (!text || typeof text !== 'string') return '';
@@ -334,6 +356,7 @@ export async function generateShortsOverlayPng({ topText, channelHandle, outputP
 export async function burnTextToShort({
   videoPath,
   filename,
+  originalFilename,
   topText,
   channelHandle,
   tempOutputPath,
@@ -403,56 +426,77 @@ export async function burnTextToShort({
       });
     });
 
-    // Move to 03_Shorts_Ready and remove from 02_Shorts_Drafts if it was in drafts
+    // Move to 03_Shorts_Ready and remove previous draft/ready file
+    let targetPath = finalReadyPath;
+    let targetFilename = filename;
+
     try {
-      if (fs.existsSync(finalReadyPath)) {
-        fs.unlinkSync(finalReadyPath);
+      if (fs.existsSync(targetPath)) {
+        try {
+          fs.unlinkSync(targetPath);
+        } catch (unlinkErr) {
+          console.warn(`[burnTextToShort] Cannot unlink existing target ${targetPath}:`, unlinkErr.message);
+          const ext = path.extname(filename);
+          const base = path.basename(filename, ext);
+          targetFilename = `${base}_${Date.now()}${ext}`;
+          targetPath = path.join(FOLDERS.SHORTS_READY, targetFilename);
+        }
       }
-      fs.renameSync(tempOutputPath, finalReadyPath);
-      if (videoPath !== finalReadyPath && fs.existsSync(videoPath)) {
-        try { fs.unlinkSync(videoPath); } catch (e) {}
-      }
+      fs.renameSync(tempOutputPath, targetPath);
     } catch (replaceErr) {
       try {
-        fs.copyFileSync(tempOutputPath, finalReadyPath);
-        fs.unlinkSync(tempOutputPath);
-        if (videoPath !== finalReadyPath && fs.existsSync(videoPath)) {
-          try { fs.unlinkSync(videoPath); } catch (e) {}
-        }
+        fs.copyFileSync(tempOutputPath, targetPath);
+        try { fs.unlinkSync(tempOutputPath); } catch (e) {}
       } catch (copyErr) {
         const ext = path.extname(filename);
         const base = path.basename(filename, ext);
-        const brandedName = `${base} (branded)${ext}`;
-        const brandedPath = path.join(FOLDERS.SHORTS_READY, brandedName);
-        fs.renameSync(tempOutputPath, brandedPath);
-
-        meta.hook = topText;
-        if (channelHandle) meta.channelHandle = channelHandle;
-        try { fs.writeFileSync(`${brandedPath}.json`, JSON.stringify(meta, null, 2), 'utf8'); } catch (e) {}
-        if (fs.existsSync(metaPath)) { try { fs.unlinkSync(metaPath); } catch (e) {} }
-
-        return {
-          filename: brandedName,
-          category: 'ready',
-          subfolder: '03_Shorts_Ready',
-          url: `/api/video/03_Shorts_Ready/${encodeURIComponent(brandedName)}?t=${Date.now()}`
-        };
+        targetFilename = `${base} (branded)${ext}`;
+        targetPath = path.join(FOLDERS.SHORTS_READY, targetFilename);
+        fs.renameSync(tempOutputPath, targetPath);
       }
     }
 
+    // Clean up original file and original draft if different or moved
+    if (videoPath !== targetPath && fs.existsSync(videoPath)) {
+      try { fs.unlinkSync(videoPath); } catch (e) {}
+    }
+    if (originalFilename && originalFilename !== targetFilename) {
+      const oldDraftPath = path.join(FOLDERS.SHORTS_DRAFTS, originalFilename);
+      const oldDraftMeta = `${oldDraftPath}.json`;
+      const oldReadyPath = path.join(FOLDERS.SHORTS_READY, originalFilename);
+      const oldReadyMeta = `${oldReadyPath}.json`;
+      try { if (fs.existsSync(oldDraftPath)) fs.unlinkSync(oldDraftPath); } catch (e) {}
+      try { if (fs.existsSync(oldDraftMeta)) fs.unlinkSync(oldDraftMeta); } catch (e) {}
+      try { if (fs.existsSync(oldReadyPath)) fs.unlinkSync(oldReadyPath); } catch (e) {}
+      try { if (fs.existsSync(oldReadyMeta)) fs.unlinkSync(oldReadyMeta); } catch (e) {}
+    }
+
+    // Ensure draft copy in 02_Shorts_Drafts is cleaned up when graduating to 03_Shorts_Ready
+    const origDraft = path.join(FOLDERS.SHORTS_DRAFTS, originalFilename || filename);
+    const origDraftMeta = `${origDraft}.json`;
+    if (fs.existsSync(origDraft) && origDraft !== targetPath) {
+      try { fs.unlinkSync(origDraft); } catch (e) {}
+    }
+    if (fs.existsSync(origDraftMeta)) {
+      try { fs.unlinkSync(origDraftMeta); } catch (e) {}
+    }
+
+    // Save metadata with title matching chosen filename
+    meta.title = path.basename(targetFilename, path.extname(targetFilename));
     meta.hook = topText;
     if (channelHandle) meta.channelHandle = channelHandle;
-    const readyMetaPath = `${finalReadyPath}.json`;
+    const readyMetaPath = `${targetPath}.json`;
     try { fs.writeFileSync(readyMetaPath, JSON.stringify(meta, null, 2), 'utf8'); } catch (e) {}
     if (metaPath !== readyMetaPath && fs.existsSync(metaPath)) {
       try { fs.unlinkSync(metaPath); } catch (e) {}
     }
 
     return {
-      filename: filename,
+      filename: targetFilename,
+      title: meta.title,
       category: 'ready',
       subfolder: '03_Shorts_Ready',
-      url: `/api/video/03_Shorts_Ready/${encodeURIComponent(filename)}?t=${Date.now()}`
+      url: `/api/video/03_Shorts_Ready/${encodeURIComponent(targetFilename)}?t=${Date.now()}`
     };
   } finally {
     for (const f of tempFilesTracker) {
