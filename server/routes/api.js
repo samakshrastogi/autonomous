@@ -7,7 +7,8 @@ import {
   FOLDERS,
   getAllVideoFiles,
   findVideoFile,
-  PROJECT_ROOT
+  PROJECT_ROOT,
+  deleteVideoMetadata
 } from '../config.js';
 import { registerEventsClient, broadcastFilesUpdate } from '../watcher.js';
 import { analyzeVideoAudioForShorts, generateSuggestedHooks } from '../services/geminiService.js';
@@ -88,10 +89,7 @@ router.post('/delete', (req, res) => {
   }
   try {
     fs.unlinkSync(found.foundPath);
-    const metaPath = `${found.foundPath}.json`;
-    if (fs.existsSync(metaPath)) {
-      try { fs.unlinkSync(metaPath); } catch (e) {}
-    }
+    deleteVideoMetadata(found.foundPath);
     console.log(`[Deleted] File ${cleanName} removed from ${found.subfolder}`);
     broadcastFilesUpdate();
     res.json({ success: true, message: `Removed ${cleanName}` });

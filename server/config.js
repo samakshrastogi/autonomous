@@ -13,7 +13,8 @@ export const DEFAULT_DOWNLOAD_DIR = ROOT_VIDEOS_DIR;
 export const FOLDERS = {
   DOWNLOADS: path.join(ROOT_VIDEOS_DIR, '01_Downloads'),
   SHORTS_DRAFTS: path.join(ROOT_VIDEOS_DIR, '02_Shorts_Drafts'),
-  SHORTS_READY: path.join(ROOT_VIDEOS_DIR, '03_Shorts_Ready')
+  SHORTS_READY: path.join(ROOT_VIDEOS_DIR, '03_Shorts_Ready'),
+  METADATA: path.join(ROOT_VIDEOS_DIR, '04_Metadata')
 };
 
 // Ensure all directories exist
@@ -27,9 +28,127 @@ Object.values(FOLDERS).forEach((dir) => {
   }
 });
 
+// Resolve the primary metadata path for a video inside 04_Metadata
+export function getMetadataPath(videoPathOrFilename) {
+  const cleanName = path.basename(videoPathOrFilename);
+  const baseName = path.basename(cleanName, path.extname(cleanName));
+  return path.join(FOLDERS.METADATA, `${baseName}.json`);
+}
+
+// Read video metadata from 04_Metadata with backwards compatibility
+export function readVideoMetadata(videoPathOrFilename) {
+  if (!videoPathOrFilename) return {};
+  const cleanName = path.basename(videoPathOrFilename);
+  const baseName = path.basename(cleanName, path.extname(cleanName));
+
+  const candidates = [
+    path.join(FOLDERS.METADATA, `${baseName}.json`),
+    path.join(FOLDERS.METADATA, `${cleanName}.json`),
+    `${videoPathOrFilename}.json`,
+    path.join(path.dirname(videoPathOrFilename), `${cleanName}.json`),
+    path.join(path.dirname(videoPathOrFilename), `${baseName}.json`)
+  ];
+
+  for (const p of candidates) {
+    if (fs.existsSync(p)) {
+      try {
+        return JSON.parse(fs.readFileSync(p, 'utf8'));
+      } catch (e) {}
+    }
+  }
+  return {};
+}
+
+// Save video metadata to 04_Metadata and purge any legacy adjacent .json
+export function saveVideoMetadata(videoPathOrFilename, metaData) {
+  if (!videoPathOrFilename || !metaData) return;
+  if (!fs.existsSync(FOLDERS.METADATA)) {
+    try { fs.mkdirSync(FOLDERS.METADATA, { recursive: true }); } catch (e) {}
+  }
+
+  const targetPath = getMetadataPath(videoPathOrFilename);
+  try {
+    fs.writeFileSync(targetPath, JSON.stringify(metaData, null, 2), 'utf8');
+  } catch (err) {
+    console.error(`Failed to save metadata to ${targetPath}:`, err.message);
+  }
+
+  // Clean up any legacy adjacent .json
+  const cleanName = path.basename(videoPathOrFilename);
+  const legacyCandidates = [
+    `${videoPathOrFilename}.json`,
+    path.join(path.dirname(videoPathOrFilename), `${cleanName}.json`),
+    path.join(FOLDERS.METADATA, `${cleanName}.json`)
+  ];
+  legacyCandidates.forEach((legacy) => {
+    if (legacy !== targetPath && fs.existsSync(legacy)) {
+      try { fs.unlinkSync(legacy); } catch (e) {}
+    }
+  });
+}
+
+// Delete video metadata when a video is deleted or moved
+export function deleteVideoMetadata(videoPathOrFilename) {
+  if (!videoPathOrFilename) return;
+  const cleanName = path.basename(videoPathOrFilename);
+  const baseName = path.basename(cleanName, path.extname(cleanName));
+
+  const candidates = [
+    path.join(FOLDERS.METADATA, `${baseName}.json`),
+    path.join(FOLDERS.METADATA, `${cleanName}.json`),
+    `${videoPathOrFilename}.json`,
+    path.join(path.dirname(videoPathOrFilename), `${cleanName}.json`)
+  ];
+
+  candidates.forEach((p) => {
+    if (fs.existsSync(p)) {
+      try { fs.unlinkSync(p); } catch (e) {}
+    }
+  });
+}
+
+// Automatically migrate all loose .json metadata files from video folders into 04_Metadata
+export function autoMigrateMetadataFiles() {
+  try {
+    if (!fs.existsSync(FOLDERS.METADATA)) {
+      fs.mkdirSync(FOLDERS.METADATA, { recursive: true });
+    }
+    const checkFolders = [
+      FOLDERS.DOWNLOADS,
+      FOLDERS.SHORTS_DRAFTS,
+      FOLDERS.SHORTS_READY,
+      ROOT_VIDEOS_DIR
+    ];
+    for (const dir of checkFolders) {
+      if (!fs.existsSync(dir)) continue;
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isFile() && entry.name.endsWith('.json')) {
+          const srcPath = path.join(dir, entry.name);
+          const cleanBase = entry.name.replace(/\.(mp4|mkv|webm)\.json$/i, '.json');
+          const destPath = path.join(FOLDERS.METADATA, cleanBase);
+          try {
+            if (fs.existsSync(destPath)) {
+              fs.unlinkSync(destPath);
+            }
+            fs.renameSync(srcPath, destPath);
+            console.log(`[Auto-Organize Metadata] Moved ${entry.name} -> 04_Metadata/${cleanBase}`);
+          } catch (e) {
+            console.warn(`[Auto-Organize Metadata] Could not move ${entry.name}:`, e.message);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[Auto-Organize Metadata Error]:', err);
+  }
+}
+
 // Auto-migrate any unorganized root video files into subfolders
 export function autoMigrateLegacyFiles() {
   try {
+    autoMigrateMetadataFiles();
+
     if (!fs.existsSync(ROOT_VIDEOS_DIR)) return;
     const entries = fs.readdirSync(ROOT_VIDEOS_DIR, { withFileTypes: true });
     for (const entry of entries) {
@@ -101,11 +220,7 @@ export function getAllVideoFiles() {
             const fullPath = path.join(config.dir, entry.name);
             const stats = fs.statSync(fullPath);
 
-            let meta = {};
-            const metaPath = `${fullPath}.json`;
-            if (fs.existsSync(metaPath)) {
-              try { meta = JSON.parse(fs.readFileSync(metaPath, 'utf8')); } catch (e) {}
-            }
+            const meta = readVideoMetadata(fullPath);
 
             allFiles.push({
               name: entry.name,

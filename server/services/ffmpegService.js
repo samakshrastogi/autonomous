@@ -1,7 +1,7 @@
 import { exec } from 'child_process';
 import path from 'path';
 import fs from 'fs';
-import { DEFAULT_DOWNLOAD_DIR, FOLDERS, findVideoFile } from '../config.js';
+import { DEFAULT_DOWNLOAD_DIR, FOLDERS, findVideoFile, readVideoMetadata, saveVideoMetadata, deleteVideoMetadata } from '../config.js';
 
 // Helper: Parse timestamp (HH:MM:SS or MM:SS or S) to total seconds
 export function parseTimestampToSeconds(ts) {
@@ -135,25 +135,21 @@ export async function renderSingleShort({
         return reject(err);
       }
 
-      // Save clip metadata alongside video for 5 suggested hooks & branding
+      // Save clip metadata to 04_Metadata
       const primaryHook = moment.hook || (Array.isArray(moment.suggestedHooks) && moment.suggestedHooks[0]) || '';
       const suggestedHooksList = (Array.isArray(moment.suggestedHooks) && moment.suggestedHooks.length > 0)
         ? moment.suggestedHooks.slice(0, 5)
         : (primaryHook ? [primaryHook] : []);
 
-      try {
-        fs.writeFileSync(`${outputShortPath}.json`, JSON.stringify({
-          title: cleanSafeTitle,
-          hook: primaryHook,
-          suggestedHooks: suggestedHooksList,
-          start: moment.start,
-          end: moment.end,
-          duration: moment.duration,
-          sourceVideo: path.basename(videoPath)
-        }, null, 2), 'utf8');
-      } catch (e) {
-        console.warn('Failed to save metadata:', e.message);
-      }
+      saveVideoMetadata(outputShortPath, {
+        title: cleanSafeTitle,
+        hook: primaryHook,
+        suggestedHooks: suggestedHooksList,
+        start: moment.start,
+        end: moment.end,
+        duration: moment.duration,
+        sourceVideo: path.basename(videoPath)
+      });
 
       resolve({
         name: path.basename(outputShortPath),
@@ -371,11 +367,7 @@ export async function burnTextToShort({
       throw new Error('Please enter top hook text or a channel watermark to apply.');
     }
 
-    const metaPath = `${videoPath}.json`;
-    let meta = {};
-    if (fs.existsSync(metaPath)) {
-      try { meta = JSON.parse(fs.readFileSync(metaPath, 'utf8')); } catch (e) {}
-    }
+    let meta = readVideoMetadata(videoPath);
 
     // Generate high-resolution transparent overlay PNG via headless Chrome/Edge for genuine human design & full-color emojis
     const overlayPngPath = path.join(DEFAULT_DOWNLOAD_DIR, `overlay_${Date.now()}_${Math.random().toString(36).substring(7)}.png`);
@@ -462,34 +454,26 @@ export async function burnTextToShort({
     }
     if (originalFilename && originalFilename !== targetFilename) {
       const oldDraftPath = path.join(FOLDERS.SHORTS_DRAFTS, originalFilename);
-      const oldDraftMeta = `${oldDraftPath}.json`;
       const oldReadyPath = path.join(FOLDERS.SHORTS_READY, originalFilename);
-      const oldReadyMeta = `${oldReadyPath}.json`;
       try { if (fs.existsSync(oldDraftPath)) fs.unlinkSync(oldDraftPath); } catch (e) {}
-      try { if (fs.existsSync(oldDraftMeta)) fs.unlinkSync(oldDraftMeta); } catch (e) {}
       try { if (fs.existsSync(oldReadyPath)) fs.unlinkSync(oldReadyPath); } catch (e) {}
-      try { if (fs.existsSync(oldReadyMeta)) fs.unlinkSync(oldReadyMeta); } catch (e) {}
+      deleteVideoMetadata(originalFilename);
     }
 
     // Ensure draft copy in 02_Shorts_Drafts is cleaned up when graduating to 03_Shorts_Ready
     const origDraft = path.join(FOLDERS.SHORTS_DRAFTS, originalFilename || filename);
-    const origDraftMeta = `${origDraft}.json`;
     if (fs.existsSync(origDraft) && origDraft !== targetPath) {
       try { fs.unlinkSync(origDraft); } catch (e) {}
     }
-    if (fs.existsSync(origDraftMeta)) {
-      try { fs.unlinkSync(origDraftMeta); } catch (e) {}
+    if (originalFilename && originalFilename !== targetFilename) {
+      deleteVideoMetadata(originalFilename);
     }
 
-    // Save metadata with title matching chosen filename
+    // Save metadata in 04_Metadata with title matching chosen filename
     meta.title = path.basename(targetFilename, path.extname(targetFilename));
     meta.hook = topText;
     if (channelHandle) meta.channelHandle = channelHandle;
-    const readyMetaPath = `${targetPath}.json`;
-    try { fs.writeFileSync(readyMetaPath, JSON.stringify(meta, null, 2), 'utf8'); } catch (e) {}
-    if (metaPath !== readyMetaPath && fs.existsSync(metaPath)) {
-      try { fs.unlinkSync(metaPath); } catch (e) {}
-    }
+    saveVideoMetadata(targetPath, meta);
 
     return {
       filename: targetFilename,

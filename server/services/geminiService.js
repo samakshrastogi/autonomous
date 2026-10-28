@@ -3,7 +3,7 @@ import { GoogleAIFileManager } from '@google/generative-ai/server';
 import { exec } from 'child_process';
 import path from 'path';
 import fs from 'fs';
-import { ROOT_VIDEOS_DIR, findVideoFile } from '../config.js';
+import { ROOT_VIDEOS_DIR, findVideoFile, readVideoMetadata, saveVideoMetadata } from '../config.js';
 import { parseTimestampToSeconds, formatSecondsToTimestamp } from './ffmpegService.js';
 
 // Dynamically discover the best working Gemini model for the user's API key
@@ -253,13 +253,9 @@ Return ONLY a valid JSON array of 5 strings, e.g.:
         if (filename) {
           const fileInfo = findVideoFile(filename);
           if (fileInfo?.foundPath) {
-            const metaPath = `${fileInfo.foundPath}.json`;
-            let meta = {};
-            if (fs.existsSync(metaPath)) {
-              try { meta = JSON.parse(fs.readFileSync(metaPath, 'utf8')); } catch (e) {}
-            }
+            const meta = readVideoMetadata(fileInfo.foundPath);
             meta.suggestedHooks = hooks.slice(0, 5);
-            try { fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2), 'utf8'); } catch (e) {}
+            saveVideoMetadata(fileInfo.foundPath, meta);
           }
         }
         return hooks.slice(0, 5);

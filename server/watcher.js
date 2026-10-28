@@ -55,7 +55,8 @@ export function initFileWatcher() {
   const watchPaths = [
     FOLDERS.DOWNLOADS,
     FOLDERS.SHORTS_DRAFTS,
-    FOLDERS.SHORTS_READY
+    FOLDERS.SHORTS_READY,
+    FOLDERS.METADATA
   ];
 
   watcher = chokidar.watch(watchPaths, {
