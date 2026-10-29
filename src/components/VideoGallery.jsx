@@ -4,6 +4,7 @@ import VideoCard from './VideoCard.jsx';
 
 export default function VideoGallery({
   files,
+  activeChannel = 'haso_dil_khol_k',
   formatFileSize,
   onGenerateShorts,
   onReviewShort,
@@ -155,9 +156,13 @@ export default function VideoGallery({
               <div className="empty-icon-bubble bubble-amber">
                 <Clock size={26} color="#f59e0b" />
               </div>
-              <h3 className="empty-title">No Pre-Ready Shorts Yet</h3>
+              <h3 className="empty-title">
+                {activeChannel === 'samaksh_gaming' ? 'No Gaming Clips Uploaded Yet' : 'No Pre-Ready Shorts Yet'}
+              </h3>
               <p className="empty-desc">
-                Download a video to auto-extract viral clips, or select any video from the Downloads tab and click <strong>"Shorts"</strong>.
+                {activeChannel === 'samaksh_gaming'
+                  ? 'Drag & drop a chess puzzle or silent gaming clip onto the left panel to analyze moves and add countdown timers!'
+                  : 'Download a video to auto-extract viral clips, or select any video from the Downloads tab and click "Shorts".'}
               </p>
               {files.some((f) => f.category === 'downloads') && (
                 <button
@@ -175,9 +180,13 @@ export default function VideoGallery({
               <div className="empty-icon-bubble bubble-green">
                 <Sparkles size={26} color="#10b981" />
               </div>
-              <h3 className="empty-title">No Ready Shorts Yet</h3>
+              <h3 className="empty-title">
+                {activeChannel === 'samaksh_gaming' ? 'No Ready Gaming Shorts Yet' : 'No Ready Shorts Yet'}
+              </h3>
               <p className="empty-desc">
-                Go to <strong>Pre Ready Shorts</strong>, review the moment, choose your viral hook and channel watermark, then click <strong>"Apply to Video"</strong>.
+                {activeChannel === 'samaksh_gaming'
+                  ? 'Go to Pre Ready Shorts, review your clip with the 5s timer and "Comment your move" CTA, then click "Apply to Video".'
+                  : 'Go to Pre Ready Shorts, review the moment, choose your viral hook and channel watermark, then click "Apply to Video".'}
               </p>
               {files.some((f) => f.category === 'drafts') && (
                 <button
@@ -195,10 +204,24 @@ export default function VideoGallery({
               <div className="empty-icon-bubble bubble-blue">
                 <Download size={26} color="#38bdf8" />
               </div>
-              <h3 className="empty-title">No Source Videos Downloaded</h3>
+              <h3 className="empty-title">
+                {activeChannel === 'samaksh_gaming' ? 'Samaksh Gaming Uses Direct Uploads' : 'No Source Videos Downloaded'}
+              </h3>
               <p className="empty-desc">
-                Paste any YouTube or Shorts URL on the left panel to begin downloading high-quality 1080p source video.
+                {activeChannel === 'samaksh_gaming'
+                  ? 'Samaksh Gaming is designed for direct silent video clip uploads. Use the left panel to upload your video clips directly into Pre-Ready Shorts.'
+                  : 'Paste any YouTube or Shorts URL on the left panel to begin downloading high-quality 1080p source video.'}
               </p>
+              {activeChannel === 'samaksh_gaming' && (
+                <button
+                  type="button"
+                  onClick={() => (setActiveTab ? setActiveTab('drafts') : setLocalTab('drafts'))}
+                  className="empty-action-pill"
+                >
+                  <Clock size={13} />
+                  <span>Go to Pre Ready Shorts</span>
+                </button>
+              )}
             </div>
           )}
         </div>

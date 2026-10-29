@@ -14,15 +14,14 @@ export async function resolveGeminiModel(key) {
 
     if (data.models && Array.isArray(data.models)) {
       const preferred = [
+        'gemini-2.5-flash',
+        'gemini-2.0-flash',
+        'gemini-1.5-flash',
+        'gemini-1.5-flash-latest',
         'gemini-3.5-flash',
-        'gemini-3.5-flash-lite',
-        'gemini-3.6-flash',
-        'gemini-3.8-flash',
-        'gemini-3.7-flash',
         'gemini-flash-latest',
         'gemini-pro-latest',
-        'gemini-2.5-flash',
-        'gemini-2.0-flash'
+        'gemini-1.5-pro'
       ];
 
       for (const pref of preferred) {
@@ -49,19 +48,73 @@ export async function resolveGeminiModel(key) {
   return 'gemini-1.5-flash-latest';
 }
 
-// Analyze audio of a video to identify genuine viral micro-stories (< 40s)
-export async function analyzeVideoAudioForShorts({ videoPath, filename, apiKey, sendEvent }) {
-  const key = apiKey.trim();
-  const fileManager = new GoogleAIFileManager(key);
-  const genAI = new GoogleGenerativeAI(key);
+// Execute an AI operation across multiple Gemini API keys with auto-failover on quota/rate-limit errors
+export async function executeWithKeyRotation({ apiKey, apiKeys, sendEvent, operationName = 'Gemini AI', fn }) {
+  let keys = [];
+  if (Array.isArray(apiKeys) && apiKeys.length > 0) {
+    keys = apiKeys.map(k => typeof k === 'string' ? k.trim() : '').filter(Boolean);
+  }
+  if (keys.length === 0 && apiKey) {
+    keys = [apiKey.trim()];
+  }
+  if (keys.length === 0 && process.env.GEMINI_API_KEY) {
+    keys = [process.env.GEMINI_API_KEY.trim()];
+  }
 
+  // Deduplicate keys
+  keys = [...new Set(keys)];
+
+  if (keys.length === 0) {
+    throw new Error('Gemini API key is required. Please add your API key in Studio Settings.');
+  }
+
+  let lastError = null;
+
+  for (let i = 0; i < keys.length; i++) {
+    const currentKey = keys[i];
+    const keyLabel = `Key #${i + 1} (…${currentKey.slice(-4)})`;
+
+    try {
+      console.log(`[Gemini Rotation] Attempting ${operationName} using ${keyLabel}`);
+      return await fn(currentKey);
+    } catch (err) {
+      lastError = err;
+      const errMsg = err?.message || String(err);
+      const isQuotaOrLimit =
+        errMsg.includes('429') ||
+        errMsg.includes('RESOURCE_EXHAUSTED') ||
+        errMsg.toLowerCase().includes('quota') ||
+        errMsg.toLowerCase().includes('rate limit') ||
+        errMsg.toLowerCase().includes('api key not valid') ||
+        errMsg.includes('API_KEY_INVALID');
+
+      if (isQuotaOrLimit && i < keys.length - 1) {
+        const nextKeyLabel = `Key #${i + 2} (…${keys[i + 1].slice(-4)})`;
+        console.warn(`[Gemini Rotation] ⚠️ ${keyLabel} quota exceeded or rate-limited. Auto-switching to backup ${nextKeyLabel}...`);
+        if (sendEvent) {
+          sendEvent('status', {
+            phase: 'key_rotation',
+            message: `⚠️ ${keyLabel} quota exceeded. Auto-switching to ${nextKeyLabel}...`
+          });
+        }
+        continue;
+      } else {
+        throw err;
+      }
+    }
+  }
+
+  throw lastError || new Error('All configured Gemini API keys failed.');
+}
+
+// Analyze audio of a video to identify genuine viral micro-stories (< 40s)
+export async function analyzeVideoAudioForShorts({ videoPath, filename, apiKey, apiKeys, sendEvent }) {
   const tempAudioPath = path.join(ROOT_VIDEOS_DIR, `temp_audio_${Date.now()}.mp3`);
-  let uploadedFile = null;
 
   try {
     sendEvent('status', { phase: 'extracting', message: 'Extracting audio for rapid analysis...' });
 
-    // 1. Ultra-fast audio extraction (1-2s)
+    // 1. Ultra-fast local audio extraction (1-2s)
     await new Promise((resolve, reject) => {
       exec(`ffmpeg -i "${videoPath}" -vn -ar 16000 -ac 1 -b:a 48k "${tempAudioPath}" -y`, (err) => {
         if (err) return reject(new Error('Audio extraction failed: ' + err.message));
@@ -69,17 +122,28 @@ export async function analyzeVideoAudioForShorts({ videoPath, filename, apiKey, 
       });
     });
 
-    sendEvent('status', { phase: 'uploading', message: 'Uploading audio to Gemini...' });
+    return await executeWithKeyRotation({
+      apiKey,
+      apiKeys,
+      sendEvent,
+      operationName: `Viral Shorts Extraction for "${filename}"`,
+      fn: async (activeKey) => {
+        const fileManager = new GoogleAIFileManager(activeKey);
+        const genAI = new GoogleGenerativeAI(activeKey);
+        let uploadedFile = null;
 
-    // 2. Upload lightweight audio file to Gemini
-    uploadedFile = await fileManager.uploadFile(tempAudioPath, {
-      mimeType: 'audio/mp3',
-      displayName: `audio_${filename}`
-    });
+        try {
+          sendEvent('status', { phase: 'uploading', message: 'Uploading audio to Gemini...' });
 
-    sendEvent('status', { phase: 'analyzing', message: 'Finding viral moments in Hinglish...' });
+          // Upload lightweight audio file to Gemini
+          uploadedFile = await fileManager.uploadFile(tempAudioPath, {
+            mimeType: 'audio/mp3',
+            displayName: `audio_${filename}`
+          });
 
-    const detectedModel = await resolveGeminiModel(key);
+          sendEvent('status', { phase: 'analyzing', message: 'Finding viral moments in Hinglish...' });
+
+          const detectedModel = await resolveGeminiModel(activeKey);
 
     const prompt = `Analyze this video audio carefully.
 Find ALL genuinely viral, funny, punchy, dramatic, or climax moments suitable for vertical video clips.
@@ -208,18 +272,23 @@ Return ONLY a valid JSON array of objects with the exact schema:
 
     return validMoments;
 
+        } finally {
+          if (uploadedFile?.file?.name) {
+            try { await fileManager.deleteFile(uploadedFile.file.name); } catch (e) {}
+          }
+        }
+      }
+    });
+
   } finally {
     if (fs.existsSync(tempAudioPath)) {
       try { fs.unlinkSync(tempAudioPath); } catch (e) {}
     }
-    if (uploadedFile?.file?.name) {
-      try { await fileManager.deleteFile(uploadedFile.file.name); } catch (e) {}
-    }
   }
 }
 
-// Generate 5 best viral hooks for a Short
-export async function generateSuggestedHooks({ filename, title, apiKey }) {
+// Generate 5 best viral hooks for a Short with key failover
+export async function generateSuggestedHooks({ filename, title, apiKey, apiKeys }) {
   const defaultHooks = [
     "Wait for the end twist! 😱",
     "Reaction dekh ke hasi nahi rukegi 😂",
@@ -228,20 +297,22 @@ export async function generateSuggestedHooks({ filename, title, apiKey }) {
     "Don't miss the climax! 🔥"
   ];
 
-  const key = apiKey || process.env.GEMINI_API_KEY;
-  if (!key) return defaultHooks;
-
   try {
-    const genAI = new GoogleGenerativeAI(key.trim());
-    const detectedModel = await resolveGeminiModel(key.trim());
-    const model = genAI.getGenerativeModel({ model: detectedModel || 'gemini-1.5-flash-latest' });
+    return await executeWithKeyRotation({
+      apiKey,
+      apiKeys,
+      operationName: 'Hook Suggestions',
+      fn: async (activeKey) => {
+        const genAI = new GoogleGenerativeAI(activeKey);
+        const detectedModel = await resolveGeminiModel(activeKey);
+        const model = genAI.getGenerativeModel({ model: detectedModel || 'gemini-1.5-flash-latest' });
 
-    const cleanName = (title || filename || 'Viral Scene')
-      .replace(/^Short\s*[-–—:]\s*/i, '')
-      .replace(/\.mp4$/i, '')
-      .trim();
+        const cleanName = (title || filename || 'Viral Scene')
+          .replace(/^Short\s*[-–—:]\s*/i, '')
+          .replace(/\.mp4$/i, '')
+          .trim();
 
-    const prompt = `You are a viral YouTube Shorts / Reels expert for Indian audiences.
+        const prompt = `You are a viral YouTube Shorts / Reels expert for Indian audiences.
 Given this video scene title/topic: "${cleanName}", generate EXACTLY 5 best, punchy, high-retention viral hook text suggestions in conversational Hinglish (Hindi written in English alphabets with emojis).
 Make them diverse: one suspense/curiosity, one funny reaction, one unexpected twist, one relatable callout, one cliffhanger.
 Keep each hook under 40 characters.
@@ -254,74 +325,77 @@ Return ONLY a valid JSON array of 5 strings, e.g.:
   "Last tak dekho twist aayega 🔥"
 ]`;
 
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-    const match = text.match(/\[\s*[\s\S]*\s*\]/);
-    if (match) {
-      const hooks = JSON.parse(match[0]);
-      if (Array.isArray(hooks) && hooks.length > 0) {
-        if (filename) {
-          const fileInfo = findVideoFile(filename);
-          if (fileInfo?.foundPath) {
-            const meta = readVideoMetadata(fileInfo.foundPath);
-            meta.suggestedHooks = hooks.slice(0, 5);
-            saveVideoMetadata(fileInfo.foundPath, meta);
+        const result = await model.generateContent(prompt);
+        const text = result.response.text();
+        const match = text.match(/\[\s*[\s\S]*\s*\]/);
+        if (match) {
+          const hooks = JSON.parse(match[0]);
+          if (Array.isArray(hooks) && hooks.length > 0) {
+            if (filename) {
+              const fileInfo = findVideoFile(filename);
+              if (fileInfo?.foundPath) {
+                const meta = readVideoMetadata(fileInfo.foundPath);
+                meta.suggestedHooks = hooks.slice(0, 5);
+                saveVideoMetadata(fileInfo.foundPath, meta);
+              }
+            }
+            return hooks.slice(0, 5);
           }
         }
-        return hooks.slice(0, 5);
+        return defaultHooks;
       }
-    }
+    });
   } catch (err) {
-    console.warn('[Gemini] Hook suggestions error:', err.message);
+    console.warn('[Gemini] Hook suggestions fallback:', err.message);
+    return defaultHooks;
   }
-  return defaultHooks;
 }
 
 // Analyze a silent or gaming video (Chess, puzzles, gaming clips, tricks) without relying on audio
-export async function analyzeGamingVideoWithoutAudio({ videoPath, filename, apiKey, sendEvent }) {
-  const key = (apiKey || process.env.GEMINI_API_KEY || '').trim();
-  if (!key) {
-    throw new Error('Gemini API key is required for video analysis.');
-  }
+export async function analyzeGamingVideoWithoutAudio({ videoPath, filename, apiKey, apiKeys, sendEvent }) {
+  return await executeWithKeyRotation({
+    apiKey,
+    apiKeys,
+    sendEvent,
+    operationName: `Gaming Vision Analysis for "${filename}"`,
+    fn: async (activeKey) => {
+      const fileManager = new GoogleAIFileManager(activeKey);
+      const genAI = new GoogleGenerativeAI(activeKey);
+      let uploadedFile = null;
 
-  const fileManager = new GoogleAIFileManager(key);
-  const genAI = new GoogleGenerativeAI(key);
+      try {
+        if (sendEvent) {
+          sendEvent('status', { phase: 'uploading', message: 'Uploading gaming video to Gemini Vision...' });
+        }
 
-  let uploadedFile = null;
+        // 1. Upload video file directly to Gemini File API
+        uploadedFile = await fileManager.uploadFile(videoPath, {
+          mimeType: 'video/mp4',
+          displayName: `gaming_${path.basename(filename)}`
+        });
 
-  try {
-    if (sendEvent) {
-      sendEvent('status', { phase: 'uploading', message: 'Uploading gaming video to Gemini Vision...' });
-    }
+        if (sendEvent) {
+          sendEvent('status', { phase: 'processing', message: 'Gemini Vision inspecting video frames...' });
+        }
 
-    // 1. Upload video file directly to Gemini File API
-    uploadedFile = await fileManager.uploadFile(videoPath, {
-      mimeType: 'video/mp4',
-      displayName: `gaming_${path.basename(filename)}`
-    });
+        // Wait for Gemini to process the video frames if necessary
+        let fileInfo = await fileManager.getFile(uploadedFile.file.name);
+        let attempts = 0;
+        while (fileInfo.state === 'PROCESSING' && attempts < 30) {
+          await new Promise((r) => setTimeout(r, 2000));
+          fileInfo = await fileManager.getFile(uploadedFile.file.name);
+          attempts++;
+        }
 
-    if (sendEvent) {
-      sendEvent('status', { phase: 'processing', message: 'Gemini Vision inspecting video frames...' });
-    }
+        if (fileInfo.state === 'FAILED') {
+          throw new Error('Gemini Vision processing failed for this video file.');
+        }
 
-    // Wait for Gemini to process the video frames if necessary
-    let fileInfo = await fileManager.getFile(uploadedFile.file.name);
-    let attempts = 0;
-    while (fileInfo.state === 'PROCESSING' && attempts < 30) {
-      await new Promise((r) => setTimeout(r, 2000));
-      fileInfo = await fileManager.getFile(uploadedFile.file.name);
-      attempts++;
-    }
+        if (sendEvent) {
+          sendEvent('status', { phase: 'analyzing', message: 'Generating exciting moves & puzzle questions...' });
+        }
 
-    if (fileInfo.state === 'FAILED') {
-      throw new Error('Gemini Vision processing failed for this video file.');
-    }
-
-    if (sendEvent) {
-      sendEvent('status', { phase: 'analyzing', message: 'Generating exciting moves & puzzle questions...' });
-    }
-
-    const detectedModel = await resolveGeminiModel(key);
+        const detectedModel = await resolveGeminiModel(activeKey);
 
     const prompt = `You are a viral YouTube Shorts & Reels expert for Gaming, Chess, Brain Teasers, and Strategy Puzzles (Channel: Samaksh Gaming).
 Carefully watch and analyze the VISUAL gameplay in this video. NOTE: This video may have NO spoken dialogue, so analyze the visual moves, board setup, traps, tactics, actions, and puzzle challenges shown on screen.
@@ -437,11 +511,13 @@ Return ONLY a valid JSON object with the exact schema:
     saveVideoMetadata(videoPath, meta);
 
     return parsedResult;
-  } finally {
-    if (uploadedFile?.file?.name) {
-      try {
-        await fileManager.deleteFile(uploadedFile.file.name);
-      } catch (e) {}
+      } finally {
+        if (uploadedFile?.file?.name) {
+          try {
+            await fileManager.deleteFile(uploadedFile.file.name);
+          } catch (e) {}
+        }
+      }
     }
-  }
+  });
 }

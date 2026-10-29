@@ -221,6 +221,22 @@ export function getAllVideoFiles() {
             const stats = fs.statSync(fullPath);
 
             const meta = readVideoMetadata(fullPath);
+            let channel = meta.channel || meta.channelId;
+            if (!channel) {
+              const lowerName = entry.name.toLowerCase();
+              const lowerHandle = (meta.channelHandle || '').toLowerCase();
+              if (
+                lowerHandle.includes('gaming') ||
+                meta.channelMode === 'gaming' ||
+                lowerName.includes('chess') ||
+                lowerName.includes('gaming') ||
+                lowerName.includes('puzzle')
+              ) {
+                channel = 'samaksh_gaming';
+              } else {
+                channel = 'haso_dil_khol_k';
+              }
+            }
 
             allFiles.push({
               name: entry.name,
@@ -234,7 +250,8 @@ export function getAllVideoFiles() {
               title: meta.title || '',
               hook: meta.hook || '',
               suggestedHooks: Array.isArray(meta.suggestedHooks) ? meta.suggestedHooks : [],
-              duration: meta.duration || null
+              duration: meta.duration || null,
+              channel
             });
           }
         }

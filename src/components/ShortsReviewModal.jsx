@@ -88,7 +88,8 @@ export default function ShortsReviewModal({
   activeChannel = 'haso_dil_khol_k',
   onBurnText,
   isProcessing,
-  apiKey
+  apiKey,
+  apiKeys = []
 }) {
   const isGaming = activeChannel === 'samaksh_gaming' || shortFile?.channelMode === 'gaming';
 
@@ -206,13 +207,18 @@ export default function ShortsReviewModal({
     if (!shortFile || isAnalyzingVision || isProcessing) return;
     setIsAnalyzingVision(true);
     setError('');
+    const keysToSend = (Array.isArray(apiKeys) && apiKeys.length > 0)
+      ? apiKeys
+      : (apiKey ? [apiKey] : []);
+
     try {
       const res = await fetch('/api/analyze-gaming', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           filename: shortFile.name,
-          apiKey: apiKey || localStorage.getItem('gemini_api_key') || ''
+          apiKey: keysToSend[0] || localStorage.getItem('gemini_api_key') || '',
+          apiKeys: keysToSend
         })
       });
       const data = await res.json();
@@ -318,6 +324,7 @@ export default function ShortsReviewModal({
         topText: topText.trim(),
         bottomText: bottomText.trim(),
         channelHandle: cleanHandle,
+        channel: activeChannel,
         timerDuration: showTimer ? timerDuration : 0
       });
       setIsSuccess(true);

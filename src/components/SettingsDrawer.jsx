@@ -17,14 +17,22 @@ import {
   AlertCircle,
   Timer,
   Laugh,
-  Gamepad2
+  Gamepad2,
+  Plus,
+  Copy,
+  ArrowUp,
+  CheckCircle2,
+  AlertTriangle,
+  Layers
 } from 'lucide-react';
 
 export default function SettingsDrawer({
   isOpen,
   onClose,
   apiKey,
+  apiKeys = [],
   onSaveApiKey,
+  onSaveApiKeys,
   channelHandle,
   onSaveChannelHandle,
   activeChannel,
@@ -45,26 +53,41 @@ export default function SettingsDrawer({
   initialTab = 'channels'
 }) {
   const [activeTab, setActiveTab] = useState(initialTab);
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [localApiKey, setLocalApiKey] = useState(apiKey || '');
-  const [testingKey, setTestingKey] = useState(false);
-  const [keyStatus, setKeyStatus] = useState(null); // { valid: bool, message: string }
+  
+  // Multi-Key Pool State
+  const [keysList, setKeysList] = useState(() => {
+    if (Array.isArray(apiKeys) && apiKeys.length > 0) return apiKeys;
+    if (apiKey) return [apiKey];
+    return [];
+  });
+  const [newKeyInput, setNewKeyInput] = useState('');
+  const [newKeyError, setNewKeyError] = useState('');
+  const [showKeyIndices, setShowKeyIndices] = useState({});
+  const [keyStatuses, setKeyStatuses] = useState({}); // { [idx]: { loading: bool, valid: bool, quota: bool, message: string } }
+  const [isTestingAll, setIsTestingAll] = useState(false);
+  const [copiedIndex, setCopiedIndex] = useState(null);
+
   const [storageInfo, setStorageInfo] = useState(null);
   const [loadingStorage, setLoadingStorage] = useState(false);
   const [cleaningCache, setCleaningCache] = useState(false);
   const [cacheResult, setCacheResult] = useState('');
   const [savedFeedback, setSavedFeedback] = useState(false);
 
-  // Sync initial tab when opened
+  // Sync initial tab and keys when drawer is opened
   useEffect(() => {
     if (isOpen) {
       setActiveTab(initialTab || 'channels');
-      setLocalApiKey(apiKey || '');
-      setKeyStatus(null);
+      const initial = (Array.isArray(apiKeys) && apiKeys.length > 0)
+        ? apiKeys
+        : (apiKey ? [apiKey] : []);
+      setKeysList(initial);
+      setNewKeyInput('');
+      setNewKeyError('');
+      setKeyStatuses({});
       setCacheResult('');
       fetchStorageInfo();
     }
-  }, [isOpen, initialTab, apiKey]);
+  }, [isOpen, initialTab, apiKey, apiKeys]);
 
   // Handle ESC key to close
   useEffect(() => {
@@ -90,37 +113,109 @@ export default function SettingsDrawer({
     }
   };
 
-  const handleTestKey = async () => {
-    if (!localApiKey.trim()) {
-      setKeyStatus({ valid: false, message: 'Please enter an API key first.' });
+  const updateKeysList = (updated) => {
+    setKeysList(updated);
+    if (onSaveApiKeys) {
+      onSaveApiKeys(updated);
+    }
+    if (onSaveApiKey) {
+      onSaveApiKey(updated[0] || '');
+    }
+    triggerSavedBanner();
+  };
+
+  const handleAddKey = () => {
+    const trimmed = newKeyInput.trim();
+    if (!trimmed) {
+      setNewKeyError('Please paste a valid Gemini API key.');
       return;
     }
-    setTestingKey(true);
-    setKeyStatus(null);
+    if (keysList.includes(trimmed)) {
+      setNewKeyError('This API key is already in your pool.');
+      return;
+    }
+    setNewKeyError('');
+    const updated = [...keysList, trimmed];
+    updateKeysList(updated);
+    setNewKeyInput('');
+    // Automatically test the newly added key
+    testKeyByIndex(trimmed, updated.length - 1);
+  };
+
+  const handleRemoveKey = (indexToRemove) => {
+    const updated = keysList.filter((_, idx) => idx !== indexToRemove);
+    updateKeysList(updated);
+    setKeyStatuses((prev) => {
+      const copy = { ...prev };
+      delete copy[indexToRemove];
+      return copy;
+    });
+  };
+
+  const handleMakePrimary = (index) => {
+    if (index === 0) return;
+    const keyToMove = keysList[index];
+    const remaining = keysList.filter((_, idx) => idx !== index);
+    const updated = [keyToMove, ...remaining];
+    updateKeysList(updated);
+  };
+
+  const testKeyByIndex = async (keyString, idx) => {
+    if (!keyString || !keyString.trim()) return;
+    setKeyStatuses((prev) => ({
+      ...prev,
+      [idx]: { loading: true, valid: false, quota: false, message: 'Validating with Google AI...' }
+    }));
+
     try {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${localApiKey.trim()}`);
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${keyString.trim()}`);
       const data = await res.json();
       if (res.ok && data.models) {
-        setKeyStatus({
-          valid: true,
-          message: `API Key Connected! (${data.models.length} models accessible)`
-        });
-        onSaveApiKey(localApiKey.trim());
-        triggerSavedBanner();
+        setKeyStatuses((prev) => ({
+          ...prev,
+          [idx]: {
+            loading: false,
+            valid: true,
+            quota: false,
+            message: `Key Connected (${data.models.length} models accessible)`
+          }
+        }));
       } else {
-        setKeyStatus({
-          valid: false,
-          message: data.error?.message || 'Invalid API key. Please check your credentials.'
-        });
+        const errorMsg = data.error?.message || '';
+        const isQuota = res.status === 429 || errorMsg.includes('429') || errorMsg.toLowerCase().includes('quota') || errorMsg.includes('ResourceExhausted');
+        setKeyStatuses((prev) => ({
+          ...prev,
+          [idx]: {
+            loading: false,
+            valid: false,
+            quota: isQuota,
+            message: isQuota
+              ? 'Free Tier quota reached (15 RPM). Auto-rotates to backup!'
+              : (errorMsg || 'Invalid API key.')
+          }
+        }));
       }
     } catch (err) {
-      setKeyStatus({
-        valid: false,
-        message: 'Network error validating API key.'
-      });
-    } finally {
-      setTestingKey(false);
+      setKeyStatuses((prev) => ({
+        ...prev,
+        [idx]: { loading: false, valid: false, quota: false, message: 'Network error validating key.' }
+      }));
     }
+  };
+
+  const handleTestAllKeys = async () => {
+    if (keysList.length === 0) return;
+    setIsTestingAll(true);
+    for (let i = 0; i < keysList.length; i++) {
+      await testKeyByIndex(keysList[i], i);
+    }
+    setIsTestingAll(false);
+  };
+
+  const handleCopyKey = (keyString, idx) => {
+    navigator.clipboard.writeText(keyString);
+    setCopiedIndex(idx);
+    setTimeout(() => setCopiedIndex(null), 2000);
   };
 
   const handleOpenFolder = async (category) => {
@@ -354,77 +449,225 @@ export default function SettingsDrawer({
           {/* TAB 2: AI ENGINE */}
           {activeTab === 'ai' && (
             <div className="settings-section-stack">
-              {/* Gemini API Key */}
+              {/* Gemini API Key Pool */}
               <div className="settings-card">
                 <div className="settings-card-header">
                   <div className="profile-icon-pill" style={{ background: 'rgba(52, 211, 153, 0.15)', color: '#34d399' }}>
                     <ShieldCheck size={18} />
                   </div>
-                  <div>
-                    <h3 className="settings-card-title">Google Gemini API Key</h3>
-                    <p className="settings-card-subtitle">Powers audio transcript analysis & silent vision recognition</p>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <h3 className="settings-card-title">Google Gemini API Keys Pool</h3>
+                    <p className="settings-card-subtitle">Auto-rotates to backup keys if Free Tier quota (15 RPM) or token limit is reached</p>
                   </div>
                 </div>
 
+                {/* Pool Status Strip */}
+                <div className="key-pool-header-strip">
+                  <span className="key-pool-count-pill">
+                    <Layers size={12} />
+                    <span>{keysList.length} {keysList.length === 1 ? 'Key' : 'Keys'} in Pool</span>
+                  </span>
+
+                  <button
+                    type="button"
+                    className="key-move-btn"
+                    onClick={handleTestAllKeys}
+                    disabled={isTestingAll || keysList.length === 0}
+                    title="Validate all keys against Google AI Studio"
+                  >
+                    {isTestingAll ? (
+                      <>
+                        <RefreshCw size={12} className="spin" />
+                        <span>Testing All...</span>
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw size={12} />
+                        <span>Test All Keys</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Configured Keys List */}
+                <div className="key-pool-list">
+                  {keysList.length === 0 ? (
+                    <div className="settings-status-box" style={{ background: 'rgba(255, 255, 255, 0.04)', color: '#94a3b8' }}>
+                      <AlertCircle size={14} />
+                      <span>No API keys added yet. Add at least 1 primary key below to enable AI video analysis.</span>
+                    </div>
+                  ) : (
+                    keysList.map((k, idx) => {
+                      const isPrimary = idx === 0;
+                      const isRevealed = Boolean(showKeyIndices[idx]);
+                      const status = keyStatuses[idx];
+                      const masked = (k.length > 12)
+                        ? `${k.slice(0, 6)}••••••••••••••••${k.slice(-4)}`
+                        : '••••••••••••••••';
+
+                      return (
+                        <div key={`${k}-${idx}`} className={`key-card-item ${isPrimary ? 'primary-card' : ''}`}>
+                          <div className="key-card-header">
+                            <span className={`key-role-badge ${isPrimary ? 'primary' : 'standby'}`}>
+                              {isPrimary ? '⭐ Key #1 (Primary - Active)' : `🔄 Key #${idx + 1} (Standby - Backup)`}
+                            </span>
+
+                            <div className="key-card-actions">
+                              {!isPrimary && (
+                                <button
+                                  type="button"
+                                  className="key-move-btn"
+                                  onClick={() => handleMakePrimary(idx)}
+                                  title="Promote this key to Primary Active"
+                                >
+                                  <ArrowUp size={11} />
+                                  <span>Make Primary</span>
+                                </button>
+                              )}
+
+                              <button
+                                type="button"
+                                className="key-delete-btn"
+                                onClick={() => handleRemoveKey(idx)}
+                                title="Remove key from pool"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="key-input-row">
+                            <div className="key-masked-text" title={isRevealed ? k : 'Click eye to view key'}>
+                              {isRevealed ? k : masked}
+                            </div>
+
+                            <button
+                              type="button"
+                              className="key-icon-btn"
+                              onClick={() => {
+                                setShowKeyIndices((prev) => ({ ...prev, [idx]: !prev[idx] }));
+                              }}
+                              title={isRevealed ? 'Mask key' : 'Reveal key'}
+                            >
+                              {isRevealed ? <EyeOff size={14} /> : <Eye size={14} />}
+                            </button>
+
+                            <button
+                              type="button"
+                              className="key-icon-btn"
+                              onClick={() => handleCopyKey(k, idx)}
+                              title="Copy key"
+                            >
+                              {copiedIndex === idx ? <Check size={14} color="#34d399" /> : <Copy size={14} />}
+                            </button>
+
+                            <button
+                              type="button"
+                              className="key-test-single-btn"
+                              onClick={() => testKeyByIndex(k, idx)}
+                              disabled={status?.loading}
+                              title="Test this API key"
+                            >
+                              {status?.loading ? (
+                                <RefreshCw size={12} className="spin" />
+                              ) : (
+                                <Sparkles size={12} />
+                              )}
+                              <span>Test</span>
+                            </button>
+                          </div>
+
+                          {status && (
+                            <div className={`key-status-pill ${status.loading ? 'testing' : status.valid ? 'valid' : status.quota ? 'quota' : 'invalid'}`}>
+                              {status.loading ? (
+                                <RefreshCw size={12} className="spin" />
+                              ) : status.valid ? (
+                                <CheckCircle2 size={12} />
+                              ) : status.quota ? (
+                                <AlertTriangle size={12} />
+                              ) : (
+                                <AlertCircle size={12} />
+                              )}
+                              <span>{status.message}</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Add New Key Form */}
                 <div className="settings-field-group">
-                  <div className="api-key-input-container">
+                  <label className="settings-label">Add Gemini API Key to Pool</label>
+                  <div className="add-key-container">
                     <input
-                      type={showApiKey ? 'text' : 'password'}
-                      className="settings-text-input key-input"
-                      placeholder="AIzaSy..."
-                      value={localApiKey}
+                      type="text"
+                      className="add-key-input"
+                      placeholder="Paste Gemini API Key (AIzaSy...)"
+                      value={newKeyInput}
                       onChange={(e) => {
-                        setLocalApiKey(e.target.value);
-                        setKeyStatus(null);
+                        setNewKeyInput(e.target.value);
+                        setNewKeyError('');
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddKey();
+                        }
                       }}
                     />
                     <button
                       type="button"
-                      className="key-toggle-btn"
-                      onClick={() => setShowApiKey(!showApiKey)}
-                      title={showApiKey ? 'Hide key' : 'Show key'}
+                      className="add-key-btn"
+                      onClick={handleAddKey}
+                      disabled={!newKeyInput.trim()}
                     >
-                      {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                      <Plus size={14} />
+                      <span>Add Key</span>
                     </button>
                   </div>
 
-                  <div className="key-actions-row">
-                    <button
-                      type="button"
-                      className="settings-action-btn primary"
-                      onClick={handleTestKey}
-                      disabled={testingKey || !localApiKey.trim()}
-                    >
-                      {testingKey ? (
-                        <>
-                          <RefreshCw size={14} className="spin" />
-                          <span>Testing Key...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles size={14} />
-                          <span>Save & Test Key</span>
-                        </>
-                      )}
-                    </button>
+                  {newKeyError && (
+                    <div className="settings-status-box error" style={{ marginTop: '0.35rem' }}>
+                      <AlertCircle size={14} />
+                      <span>{newKeyError}</span>
+                    </div>
+                  )}
 
+                  <div style={{ marginTop: '0.45rem', display: 'flex', justifyContent: 'flex-end' }}>
                     <a
                       href="https://aistudio.google.com/app/apikey"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="settings-link-btn"
                     >
-                      <span>Get Free API Key</span>
+                      <span>Get Free API Key from Google AI Studio</span>
                       <ExternalLink size={12} />
                     </a>
                   </div>
+                </div>
 
-                  {keyStatus && (
-                    <div className={`settings-status-box ${keyStatus.valid ? 'success' : 'error'}`}>
-                      {keyStatus.valid ? <Check size={14} /> : <AlertCircle size={14} />}
-                      <span>{keyStatus.message}</span>
+                {/* How Auto-Failover Works Callout */}
+                <div className="auto-failover-info-card">
+                  <div className="auto-failover-title">
+                    <Sparkles size={14} />
+                    <span>How Auto-Switching Works</span>
+                  </div>
+                  <div className="auto-failover-steps">
+                    <div className="auto-failover-step">
+                      <span className="step-num">1</span>
+                      <span>Video audio & silent vision analysis run on your <strong>Key #1 (Primary)</strong>.</span>
                     </div>
-                  )}
+                    <div className="auto-failover-step">
+                      <span className="step-num">2</span>
+                      <span>If Gemini returns <strong>429 / Quota Exhaustion (15 RPM limit)</strong>, the engine auto-fails over to <strong>Key #2 (Backup)</strong> instantly.</span>
+                    </div>
+                    <div className="auto-failover-step">
+                      <span className="step-num">3</span>
+                      <span>Your Shorts generation continues with <strong>zero interruption</strong> and never fails halfway through!</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 

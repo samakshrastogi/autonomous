@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
 import { Download, Clock, CheckCircle2, Sparkles, HardDrive, Gamepad2 } from 'lucide-react';
 import Header from './components/Header.jsx';
 import DownloadForm from './components/DownloadForm.jsx';
@@ -42,8 +42,29 @@ export default function App() {
   const [preferredModel, setPreferredModel] = useState(() => localStorage.getItem('shorts_studio_ai_model') || 'auto');
   const [shortsCount, setShortsCount] = useState(() => parseInt(localStorage.getItem('shorts_studio_shorts_count') || '3', 10));
 
-  // Gemini API Key state
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
+  // Multi-Gemini API Keys pool state (auto-rotation engine)
+  const [apiKeys, setApiKeys] = useState(() => {
+    try {
+      const saved = localStorage.getItem('gemini_api_keys');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    const legacy = localStorage.getItem('gemini_api_key');
+    return legacy ? [legacy] : [];
+  });
+
+  const [apiKey, setApiKey] = useState(() => {
+    try {
+      const saved = localStorage.getItem('gemini_api_keys');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
+      }
+    } catch (e) {}
+    return localStorage.getItem('gemini_api_key') || '';
+  });
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
 
   // Channel Username Branding state (defaults to matching active channel)
@@ -124,9 +145,33 @@ export default function App() {
     return () => document.removeEventListener('play', handleVideoPlay, true);
   }, []);
 
+  const handleSaveApiKeys = (keys) => {
+    const cleanKeys = (Array.isArray(keys) ? keys : [keys])
+      .map((k) => (typeof k === 'string' ? k.trim() : ''))
+      .filter(Boolean);
+    setApiKeys(cleanKeys);
+    localStorage.setItem('gemini_api_keys', JSON.stringify(cleanKeys));
+    if (cleanKeys.length > 0) {
+      setApiKey(cleanKeys[0]);
+      localStorage.setItem('gemini_api_key', cleanKeys[0]);
+    } else {
+      setApiKey('');
+      localStorage.removeItem('gemini_api_key');
+    }
+  };
+
   const handleSaveApiKey = (key) => {
-    setApiKey(key);
-    localStorage.setItem('gemini_api_key', key);
+    const trimmed = (key || '').trim();
+    setApiKey(trimmed);
+    localStorage.setItem('gemini_api_key', trimmed);
+    if (trimmed) {
+      setApiKeys((prev) => {
+        const without = prev.filter((k) => k !== trimmed);
+        const updated = [trimmed, ...without];
+        localStorage.setItem('gemini_api_keys', JSON.stringify(updated));
+        return updated;
+      });
+    }
   };
 
   const handleSaveChannelHandle = (handle) => {
@@ -177,7 +222,20 @@ export default function App() {
       : (comedyHandle || '@HasoDilKholK');
     setChannelHandle(targetHandle);
     localStorage.setItem('shorts_channel_handle', targetHandle);
+
+    // If switching to Samaksh Gaming, default active tab to Pre-Ready Shorts (drafts)
+    if (channelId === 'samaksh_gaming' && activeTab === 'downloads') {
+      setActiveTab('drafts');
+    }
   };
+
+  // Filter videos strictly by the currently selected channel!
+  const channelFiles = useMemo(() => {
+    return recentFiles.filter((f) => {
+      const fileChannel = f.channel || 'haso_dil_khol_k';
+      return fileChannel === activeChannel;
+    });
+  }, [recentFiles, activeChannel]);
 
   const handleUploadSuccess = (uploadedFile) => {
     fetchRecentFiles();
@@ -195,7 +253,7 @@ export default function App() {
     handleOpenReviewModal(short, short.hook);
   };
 
-  const handleBurnText = async ({ filename, topText, bottomText, channelHandle: customHandle, timerDuration }) => {
+  const handleBurnText = async ({ filename, topText, bottomText, channelHandle: customHandle, timerDuration, channel: burnChannel }) => {
     setIsBurningText(true);
     try {
       const res = await fetch('/api/burn-text', {
@@ -206,6 +264,7 @@ export default function App() {
           topText,
           bottomText,
           channelHandle: customHandle,
+          channel: burnChannel || activeChannel,
           timerDuration
         })
       });
@@ -283,7 +342,7 @@ export default function App() {
       const response = await fetch('/api/download', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: downloadTarget })
+        body: JSON.stringify({ url: downloadTarget, channel: activeChannel })
       });
 
       if (!response.ok) {
@@ -387,11 +446,13 @@ export default function App() {
     }
   };
 
-  // Trigger Gemini Shorts Generation pipeline
+  // Trigger Gemini Shorts Generation pipeline (with Multi-Key Pool auto-failover)
   const handleGenerateShorts = async (file) => {
-    if (!apiKey) {
+    const keysToSend = apiKeys.length > 0 ? apiKeys : (apiKey ? [apiKey] : []);
+    if (keysToSend.length === 0) {
       setSelectedVideoForShorts(file);
-      setIsApiKeyModalOpen(true);
+      setSettingsInitialTab('ai');
+      setIsSettingsOpen(true);
       return;
     }
 
@@ -408,8 +469,10 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           filename: file.name,
-          apiKey: apiKey,
-          channelHandle: channelHandle
+          apiKey: keysToSend[0],
+          apiKeys: keysToSend,
+          channelHandle: channelHandle,
+          channel: activeChannel
         })
       });
 
@@ -591,7 +654,7 @@ export default function App() {
             />
           </div>
 
-          {/* Workspace Summary Card */}
+          {/* Workspace Summary Card - Reflects active channel's files */}
           <div className="studio-card studio-stats-card compact-card">
             <div className="stats-header-row">
               <div className="stats-title-wrap">
@@ -599,7 +662,7 @@ export default function App() {
                 <span className="stats-card-title">Studio Library</span>
               </div>
               <span className="stats-total-pill">
-                {recentFiles.length} Videos
+                {channelFiles.length} Videos
               </span>
             </div>
 
@@ -610,7 +673,7 @@ export default function App() {
                 title="View Source Downloads"
               >
                 <span className="stat-box-num text-cyan">
-                  {recentFiles.filter((f) => f.category === 'downloads').length}
+                  {channelFiles.filter((f) => f.category === 'downloads').length}
                 </span>
                 <span className="stat-box-label">Sources</span>
               </div>
@@ -621,7 +684,7 @@ export default function App() {
                 title="View Pre-Ready Shorts"
               >
                 <span className="stat-box-num text-amber">
-                  {recentFiles.filter((f) => f.category === 'drafts').length}
+                  {channelFiles.filter((f) => f.category === 'drafts').length}
                 </span>
                 <span className="stat-box-label">Pre-Ready</span>
               </div>
@@ -632,7 +695,7 @@ export default function App() {
                 title="View Ready Shorts"
               >
                 <span className="stat-box-num text-emerald">
-                  {recentFiles.filter((f) => f.category === 'ready').length}
+                  {channelFiles.filter((f) => f.category === 'ready').length}
                 </span>
                 <span className="stat-box-label">Shorts</span>
               </div>
@@ -640,15 +703,16 @@ export default function App() {
 
             <div className="stats-storage-row">
               <span>Total Size</span>
-              <strong>{formatFileSize(recentFiles.reduce((acc, f) => acc + (f.size || 0), 0))}</strong>
+              <strong>{formatFileSize(channelFiles.reduce((acc, f) => acc + (f.size || 0), 0))}</strong>
             </div>
           </div>
         </aside>
 
-        {/* RIGHT SIDE: All Videos Data */}
+        {/* RIGHT SIDE: Channel-Specific Videos Data */}
         <main className="dashboard-right">
           <VideoGallery
-            files={recentFiles}
+            files={channelFiles}
+            activeChannel={activeChannel}
             formatFileSize={formatFileSize}
             onGenerateShorts={handleGenerateShorts}
             onReviewShort={handleOpenReviewModal}
@@ -666,7 +730,9 @@ export default function App() {
             isOpen={isSettingsOpen}
             onClose={() => setIsSettingsOpen(false)}
             apiKey={apiKey}
+            apiKeys={apiKeys}
             onSaveApiKey={handleSaveApiKey}
+            onSaveApiKeys={handleSaveApiKeys}
             channelHandle={channelHandle}
             onSaveChannelHandle={handleSaveChannelHandle}
             activeChannel={activeChannel}
@@ -717,6 +783,7 @@ export default function App() {
             onBurnText={handleBurnText}
             isProcessing={isBurningText}
             apiKey={apiKey}
+            apiKeys={apiKeys}
           />
         )}
       </Suspense>

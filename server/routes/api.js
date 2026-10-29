@@ -236,14 +236,21 @@ router.get(['/video/:subfolder/:filename', '/video/:filename'], (req, res) => {
 
 // Download video with Server-Sent Events (SSE)
 router.post('/download', (req, res) => {
-  const { url, outputDir } = req.body;
+  const { url, outputDir, channel = 'haso_dil_khol_k' } = req.body;
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
 
+  let downloadedFilename = null;
+
   const sendEvent = (event, data) => {
+    if (event === 'title' && data?.filename) {
+      downloadedFilename = data.filename;
+    } else if (event === 'complete' && data?.filename) {
+      downloadedFilename = data.filename;
+    }
     res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   };
 
@@ -253,7 +260,15 @@ router.post('/download', (req, res) => {
       outputDir,
       sendEvent,
       onFinish: (err) => {
-        if (!err) broadcastFilesUpdate();
+        if (!err && downloadedFilename) {
+          const dlPath = path.join(FOLDERS.DOWNLOADS, downloadedFilename);
+          const meta = readVideoMetadata(dlPath);
+          meta.channel = channel;
+          saveVideoMetadata(dlPath, meta);
+          broadcastFilesUpdate();
+        } else if (!err) {
+          broadcastFilesUpdate();
+        }
         res.end();
       }
     });
@@ -271,18 +286,20 @@ router.post('/download', (req, res) => {
 
 // Generate Shorts with Parallel Multi-Core Rendering & 5s Retention Hook
 router.post('/generate-shorts', async (req, res) => {
-  const { filename, apiKey, channelHandle } = req.body;
-  const key = apiKey || process.env.GEMINI_API_KEY;
+  const { filename, apiKey, apiKeys, channelHandle, channel } = req.body;
+  const keys = (Array.isArray(apiKeys) && apiKeys.length > 0)
+    ? apiKeys
+    : (apiKey ? [apiKey] : (process.env.GEMINI_API_KEY ? [process.env.GEMINI_API_KEY] : []));
 
-  if (!key || typeof key !== 'string' || !key.trim()) {
-    return res.status(400).json({ error: 'Gemini API key is required.' });
+  if (keys.length === 0) {
+    return res.status(400).json({ error: 'Gemini API key is required. Please add your API key in Settings.' });
   }
 
-  // Persist key to process.env and .env if not set
-  if (!process.env.GEMINI_API_KEY && key) {
-    process.env.GEMINI_API_KEY = key.trim();
+  // Persist primary key to process.env and .env if not set
+  if (!process.env.GEMINI_API_KEY && keys[0]) {
+    process.env.GEMINI_API_KEY = keys[0].trim();
     try {
-      fs.writeFileSync(path.join(PROJECT_ROOT, '.env'), `GEMINI_API_KEY=${key.trim()}\n`);
+      fs.writeFileSync(path.join(PROJECT_ROOT, '.env'), `GEMINI_API_KEY=${keys[0].trim()}\n`);
     } catch (e) {}
   }
 
@@ -305,11 +322,12 @@ router.post('/generate-shorts', async (req, res) => {
   };
 
   try {
-    // 1. Analyze video audio for genuine viral micro-stories (< 40s)
+    // 1. Analyze video audio for genuine viral micro-stories (< 40s) using multi-key rotation
     const moments = await analyzeVideoAudioForShorts({
       videoPath: fileInfo.foundPath,
       filename,
-      apiKey: key,
+      apiKey: keys[0],
+      apiKeys: keys,
       sendEvent
     });
 
@@ -323,6 +341,20 @@ router.post('/generate-shorts', async (req, res) => {
       sendEvent,
       2
     );
+
+    // Propagate channel to all generated shorts metadata in 02_Shorts_Drafts
+    const parentMeta = readVideoMetadata(fileInfo.foundPath);
+    const targetChannel = channel || parentMeta.channel || (parentMeta.channelMode === 'gaming' ? 'samaksh_gaming' : 'haso_dil_khol_k');
+    for (const short of generatedFiles) {
+      const shortFilename = short.filename || short.name;
+      const shortPath = path.join(FOLDERS.SHORTS_DRAFTS, shortFilename);
+      if (fs.existsSync(shortPath)) {
+        const meta = readVideoMetadata(shortPath);
+        meta.channel = targetChannel;
+        meta.channelHandle = channelHandle || meta.channelHandle;
+        saveVideoMetadata(shortPath, meta);
+      }
+    }
 
     sendEvent('complete', {
       success: true,
@@ -341,7 +373,7 @@ router.post('/generate-shorts', async (req, res) => {
     } else if (userMsg.includes('429') || userMsg.toLowerCase().includes('quota') || userMsg.includes('ResourceExhausted')) {
       const retryMatch = userMsg.match(/retry in ([\d\.]+)s/i);
       const retrySec = retryMatch ? Math.ceil(parseFloat(retryMatch[1])) : 60;
-      userMsg = `QUOTA_LIMIT: Gemini Free Tier quota reached (15 req/min). Resets in ~${retrySec}s. Please wait a moment or switch your API key.`;
+      userMsg = `QUOTA_LIMIT: Gemini Free Tier quota reached. Resets in ~${retrySec}s. Add multiple backup keys in Settings to auto-switch!`;
     }
     sendEvent('error', { message: userMsg, raw: err.message });
     res.end();
@@ -369,7 +401,9 @@ router.post('/upload-video', upload.single('video'), async (req, res) => {
       title: cleanTitle,
       duration,
       uploadedAt: Date.now(),
-      channelMode: req.body.channelMode || 'gaming'
+      channel: 'samaksh_gaming',
+      channelMode: 'gaming',
+      channelHandle: req.body.channelHandle || '@SamakshGaming'
     });
 
     broadcastFilesUpdate();
@@ -384,7 +418,8 @@ router.post('/upload-video', upload.single('video'), async (req, res) => {
         category: 'drafts',
         categoryLabel: 'Pre Ready Shorts',
         subfolder: '02_Shorts_Drafts',
-        url: `/api/video/02_Shorts_Drafts/${encodeURIComponent(uploadedFilename)}`
+        url: `/api/video/02_Shorts_Drafts/${encodeURIComponent(uploadedFilename)}`,
+        channel: 'samaksh_gaming'
       }
     });
   });
@@ -392,11 +427,13 @@ router.post('/upload-video', upload.single('video'), async (req, res) => {
 
 // Analyze silent/gaming video for puzzles and exciting moves (Samaksh Gaming mode)
 router.post('/analyze-gaming', async (req, res) => {
-  const { filename, apiKey } = req.body;
-  const key = apiKey || process.env.GEMINI_API_KEY;
+  const { filename, apiKey, apiKeys } = req.body;
+  const keys = (Array.isArray(apiKeys) && apiKeys.length > 0)
+    ? apiKeys
+    : (apiKey ? [apiKey] : (process.env.GEMINI_API_KEY ? [process.env.GEMINI_API_KEY] : []));
 
-  if (!key || typeof key !== 'string' || !key.trim()) {
-    return res.status(400).json({ error: 'Gemini API key is required.' });
+  if (keys.length === 0) {
+    return res.status(400).json({ error: 'Gemini API key is required. Please configure keys in Settings.' });
   }
 
   if (!filename) {
@@ -412,7 +449,8 @@ router.post('/analyze-gaming', async (req, res) => {
     const analysis = await analyzeGamingVideoWithoutAudio({
       videoPath: fileInfo.foundPath,
       filename,
-      apiKey: key
+      apiKey: keys[0],
+      apiKeys: keys
     });
 
     broadcastFilesUpdate();
@@ -423,7 +461,7 @@ router.post('/analyze-gaming', async (req, res) => {
     if (userMsg.includes('429') || userMsg.toLowerCase().includes('quota') || userMsg.includes('resourceexhausted')) {
       const retryMatch = userMsg.match(/retry in ([\d\.]+)s/i);
       const retrySec = retryMatch ? Math.ceil(parseFloat(retryMatch[1])) : 60;
-      userMsg = `QUOTA_LIMIT: Gemini Free Tier quota reached (15 req/min). Resets in ~${retrySec}s. Please wait a moment or switch your API key.`;
+      userMsg = `QUOTA_LIMIT: Gemini Free Tier quota reached. Resets in ~${retrySec}s. Add backup keys in Settings to auto-switch!`;
     }
     res.status(500).json({ error: userMsg, raw: err.message });
   }
@@ -431,9 +469,9 @@ router.post('/analyze-gaming', async (req, res) => {
 
 // Suggest 5 best viral hooks for a Short
 router.post('/suggest-hooks', async (req, res) => {
-  const { filename, title, apiKey } = req.body;
+  const { filename, title, apiKey, apiKeys } = req.body;
   try {
-    const suggestedHooks = await generateSuggestedHooks({ filename, title, apiKey });
+    const suggestedHooks = await generateSuggestedHooks({ filename, title, apiKey, apiKeys });
     res.json({ suggestedHooks });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -442,7 +480,7 @@ router.post('/suggest-hooks', async (req, res) => {
 
 // Burn custom top hook text, bottom comment text (for 5s) & channel handle
 router.post('/burn-text', async (req, res) => {
-  const { filename, topText, bottomText, channelHandle, hookDuration = 0, timerDuration = 0 } = req.body;
+  const { filename, topText, bottomText, channelHandle, channel, hookDuration = 0, timerDuration = 0 } = req.body;
   if (!filename) {
     return res.status(400).json({ error: 'Filename is required' });
   }
@@ -475,11 +513,13 @@ router.post('/burn-text', async (req, res) => {
       timerDuration: Number(timerDuration) || 0
     });
 
-    // Update metadata
+    // Update metadata and preserve channel association
+    const sourceMeta = readVideoMetadata(fileInfo.foundPath);
     const meta = readVideoMetadata(finalReadyPath);
     if (topText) meta.hook = topText;
     if (bottomText) meta.bottomText = bottomText;
     if (channelHandle) meta.channelHandle = channelHandle;
+    meta.channel = channel || sourceMeta.channel || (channelHandle?.includes('Gaming') ? 'samaksh_gaming' : 'haso_dil_khol_k');
     meta.timerDuration = Number(timerDuration) || 0;
     saveVideoMetadata(finalReadyPath, meta);
 
