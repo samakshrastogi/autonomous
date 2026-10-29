@@ -1,11 +1,12 @@
 import React from 'react';
-import { Key, Sparkles, AtSign, Clapperboard } from 'lucide-react';
+import { Key, Sparkles, AtSign, Clapperboard, Settings } from 'lucide-react';
 
 export default function Header({
   apiKey,
   onOpenApiKeyModal,
   channelHandle,
-  onOpenChannelModal
+  onOpenChannelModal,
+  onOpenSettings
 }) {
   return (
     <header className="top-navbar">
@@ -48,6 +49,16 @@ export default function Header({
               <span>Connect AI</span>
             </>
           )}
+        </button>
+
+        <button
+          type="button"
+          onClick={onOpenSettings}
+          className="header-glass-pill pill-settings"
+          title="Studio Settings"
+        >
+          <Settings size={14} color="#94a3b8" />
+          <span>Settings</span>
         </button>
       </div>
     </header>

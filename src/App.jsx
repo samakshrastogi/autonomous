@@ -7,6 +7,7 @@ import VideoGallery from './components/VideoGallery.jsx';
 import ShortsGeneratorSidebar from './components/ShortsGeneratorSidebar.jsx';
 import ChannelSelector from './components/ChannelSelector.jsx';
 import VideoUploader from './components/VideoUploader.jsx';
+import SettingsDrawer from './components/SettingsDrawer.jsx';
 
 // Dynamic code splitting: lazy-load modals on demand for faster initial page load
 const ApiKeyModal = lazy(() => import('./components/ApiKeyModal.jsx'));
@@ -29,6 +30,17 @@ export default function App() {
   const [activeChannel, setActiveChannel] = useState(() => {
     return localStorage.getItem('shorts_studio_active_channel') || 'haso_dil_khol_k';
   });
+
+  // Settings Slide-Over Drawer state
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsInitialTab, setSettingsInitialTab] = useState('channels');
+  const [autoPilotEnabled, setAutoPilotEnabled] = useState(() => localStorage.getItem('shorts_studio_autopilot') !== 'false');
+  const [defaultTimerDuration, setDefaultTimerDuration] = useState(() => parseInt(localStorage.getItem('shorts_studio_default_timer') || '5', 10));
+  const [defaultGamingCta, setDefaultGamingCta] = useState(() => localStorage.getItem('shorts_studio_gaming_cta') || '💬 Comment your move 👇');
+  const [comedyHandle, setComedyHandle] = useState(() => localStorage.getItem('shorts_studio_comedy_handle') || '@HasoDilKholK');
+  const [gamingHandle, setGamingHandle] = useState(() => localStorage.getItem('shorts_studio_gaming_handle') || '@SamakshGaming');
+  const [preferredModel, setPreferredModel] = useState(() => localStorage.getItem('shorts_studio_ai_model') || 'auto');
+  const [shortsCount, setShortsCount] = useState(() => parseInt(localStorage.getItem('shorts_studio_shorts_count') || '3', 10));
 
   // Gemini API Key state
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
@@ -122,10 +134,47 @@ export default function App() {
     localStorage.setItem('shorts_channel_handle', handle);
   };
 
+  const handleToggleAutoPilot = (enabled) => {
+    setAutoPilotEnabled(enabled);
+    localStorage.setItem('shorts_studio_autopilot', String(enabled));
+  };
+
+  const handleSaveDefaultTimer = (sec) => {
+    setDefaultTimerDuration(sec);
+    localStorage.setItem('shorts_studio_default_timer', String(sec));
+  };
+
+  const handleSaveDefaultGamingCta = (cta) => {
+    setDefaultGamingCta(cta);
+    localStorage.setItem('shorts_studio_gaming_cta', cta);
+  };
+
+  const handleSaveComedyHandle = (h) => {
+    setComedyHandle(h);
+    localStorage.setItem('shorts_studio_comedy_handle', h);
+  };
+
+  const handleSaveGamingHandle = (h) => {
+    setGamingHandle(h);
+    localStorage.setItem('shorts_studio_gaming_handle', h);
+  };
+
+  const handleSavePreferredModel = (m) => {
+    setPreferredModel(m);
+    localStorage.setItem('shorts_studio_ai_model', m);
+  };
+
+  const handleSaveShortsCount = (c) => {
+    setShortsCount(c);
+    localStorage.setItem('shorts_studio_shorts_count', String(c));
+  };
+
   const handleSelectChannel = (channelId) => {
     setActiveChannel(channelId);
     localStorage.setItem('shorts_studio_active_channel', channelId);
-    const targetHandle = channelId === 'samaksh_gaming' ? '@SamakshGaming' : '@HasoDilKholK';
+    const targetHandle = channelId === 'samaksh_gaming'
+      ? (gamingHandle || '@SamakshGaming')
+      : (comedyHandle || '@HasoDilKholK');
     setChannelHandle(targetHandle);
     localStorage.setItem('shorts_channel_handle', targetHandle);
   };
@@ -300,8 +349,8 @@ export default function App() {
             fetchRecentFiles();
             setActiveTab('downloads');
 
-            // Default: Auto-create AI viral shorts immediately!
-            if (eventData.filename) {
+            // Auto-create AI viral shorts immediately if autoPilot is enabled
+            if (autoPilotEnabled && eventData.filename) {
               const dlFile = {
                 name: eventData.filename,
                 category: 'downloads',
@@ -457,9 +506,19 @@ export default function App() {
       {/* Top Navbar */}
       <Header
         apiKey={apiKey}
-        onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
+        onOpenApiKeyModal={() => {
+          setSettingsInitialTab('ai');
+          setIsSettingsOpen(true);
+        }}
         channelHandle={channelHandle}
-        onOpenChannelModal={() => setIsChannelModalOpen(true)}
+        onOpenChannelModal={() => {
+          setSettingsInitialTab('channels');
+          setIsSettingsOpen(true);
+        }}
+        onOpenSettings={() => {
+          setSettingsInitialTab('channels');
+          setIsSettingsOpen(true);
+        }}
       />
 
       <div className="dashboard-layout">
@@ -600,8 +659,35 @@ export default function App() {
         </main>
       </div>
 
-      {/* Modals with Suspense for on-demand lazy loading */}
+      {/* Modals & Slide-Over Drawer with Suspense for on-demand lazy loading */}
       <Suspense fallback={null}>
+        {isSettingsOpen && (
+          <SettingsDrawer
+            isOpen={isSettingsOpen}
+            onClose={() => setIsSettingsOpen(false)}
+            apiKey={apiKey}
+            onSaveApiKey={handleSaveApiKey}
+            channelHandle={channelHandle}
+            onSaveChannelHandle={handleSaveChannelHandle}
+            activeChannel={activeChannel}
+            autoPilotEnabled={autoPilotEnabled}
+            onToggleAutoPilot={handleToggleAutoPilot}
+            defaultTimerDuration={defaultTimerDuration}
+            onSaveDefaultTimer={handleSaveDefaultTimer}
+            defaultGamingCta={defaultGamingCta}
+            onSaveDefaultGamingCta={handleSaveDefaultGamingCta}
+            comedyHandle={comedyHandle}
+            onSaveComedyHandle={handleSaveComedyHandle}
+            gamingHandle={gamingHandle}
+            onSaveGamingHandle={handleSaveGamingHandle}
+            preferredModel={preferredModel}
+            onSavePreferredModel={handleSavePreferredModel}
+            shortsCount={shortsCount}
+            onSaveShortsCount={handleSaveShortsCount}
+            initialTab={settingsInitialTab}
+          />
+        )}
+
         {isApiKeyModalOpen && (
           <ApiKeyModal
             isOpen={isApiKeyModalOpen}

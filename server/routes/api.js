@@ -76,6 +76,24 @@ router.get('/files', (req, res) => {
   res.json(data);
 });
 
+// Helper function to recursively calculate directory size in bytes
+function getDirSizeBytes(dirPath) {
+  let size = 0;
+  if (!fs.existsSync(dirPath)) return 0;
+  try {
+    const files = fs.readdirSync(dirPath);
+    for (const file of files) {
+      const full = path.join(dirPath, file);
+      try {
+        const stat = fs.statSync(full);
+        if (stat.isFile()) size += stat.size;
+        else if (stat.isDirectory()) size += getDirSizeBytes(full);
+      } catch (e) {}
+    }
+  } catch (e) {}
+  return size;
+}
+
 // Open download folder in Windows Explorer
 router.post('/open-folder', (req, res) => {
   let targetDir = req.body.dir;
@@ -83,6 +101,7 @@ router.post('/open-folder', (req, res) => {
     if (req.body.category === 'downloads') targetDir = FOLDERS.DOWNLOADS;
     else if (req.body.category === 'drafts') targetDir = FOLDERS.SHORTS_DRAFTS;
     else if (req.body.category === 'ready') targetDir = FOLDERS.SHORTS_READY;
+    else if (req.body.category === 'metadata') targetDir = FOLDERS.METADATA;
     else targetDir = ROOT_VIDEOS_DIR;
   }
   if (!fs.existsSync(targetDir)) {
@@ -100,6 +119,66 @@ router.post('/open-folder', (req, res) => {
     }
     res.json({ success: true, path: targetDir });
   });
+});
+
+// Storage and directory size diagnostics
+router.get('/storage-info', (req, res) => {
+  try {
+    const info = {
+      downloads: getDirSizeBytes(FOLDERS.DOWNLOADS),
+      drafts: getDirSizeBytes(FOLDERS.SHORTS_DRAFTS),
+      ready: getDirSizeBytes(FOLDERS.SHORTS_READY),
+      metadata: getDirSizeBytes(FOLDERS.METADATA),
+      total: getDirSizeBytes(ROOT_VIDEOS_DIR),
+      paths: {
+        root: ROOT_VIDEOS_DIR,
+        downloads: FOLDERS.DOWNLOADS,
+        drafts: FOLDERS.SHORTS_DRAFTS,
+        ready: FOLDERS.SHORTS_READY,
+        metadata: FOLDERS.METADATA
+      }
+    };
+    res.json(info);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Clean render caches & leftover temporary processing files
+router.post('/clean-cache', (req, res) => {
+  let freedBytes = 0;
+  let freedCount = 0;
+
+  try {
+    const scanAndClean = (dir) => {
+      if (!fs.existsSync(dir)) return;
+      const entries = fs.readdirSync(dir);
+      for (const entry of entries) {
+        const full = path.join(dir, entry);
+        try {
+          const stat = fs.statSync(full);
+          if (stat.isFile()) {
+            const isTemp = entry.startsWith('temp_') ||
+                           entry.endsWith('.tmp') ||
+                           entry.startsWith('crop_temp_') ||
+                           entry.startsWith('overlay_temp_');
+            if (isTemp) {
+              freedBytes += stat.size;
+              freedCount += 1;
+              fs.unlinkSync(full);
+            }
+          } else if (stat.isDirectory()) {
+            scanAndClean(full);
+          }
+        } catch (e) {}
+      }
+    };
+
+    scanAndClean(ROOT_VIDEOS_DIR);
+    res.json({ success: true, freedBytes, freedCount });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Delete video file
