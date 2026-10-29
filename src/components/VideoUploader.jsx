@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { UploadCloud, FileVideo, Sparkles, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { UploadCloud, FileVideo, Sparkles, AlertCircle, Timer, MessageSquare } from 'lucide-react';
 
 export default function VideoUploader({ onUploadSuccess, channelHandle = '@SamakshGaming' }) {
   const [isDragging, setIsDragging] = useState(false);
@@ -44,12 +44,12 @@ export default function VideoUploader({ onUploadSuccess, channelHandle = '@Samak
     const isValid = validExtensions.some((ext) => fileName.endsWith(ext));
 
     if (!isValid) {
-      setError('Please select a valid video file (.mp4, .mov, .webm, or .mkv).');
+      setError('Please select a valid video (.mp4, .mov, .webm, or .mkv).');
       return;
     }
 
     if (file.size > 500 * 1024 * 1024) {
-      setError('File size exceeds the 500MB upload limit.');
+      setError('File exceeds 500MB limit.');
       return;
     }
 
@@ -90,30 +90,30 @@ export default function VideoUploader({ onUploadSuccess, channelHandle = '@Samak
             setError(res.error || 'Upload failed.');
           }
         } catch (e) {
-          setError('Failed to parse server upload response.');
+          setError('Failed to parse server response.');
         }
       } else {
-        setError(`Upload failed with server status ${xhr.status}`);
+        setError(`Upload failed (Status ${xhr.status})`);
       }
     };
 
     xhr.onerror = () => {
       setIsUploading(false);
-      setError('Network connection error during file upload.');
+      setError('Network connection error.');
     };
 
     xhr.send(formData);
   };
 
   return (
-    <div className="studio-card upload-card">
-      <div className="studio-card-header">
-        <div className="studio-icon-badge" style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8' }}>
-          <UploadCloud size={20} />
+    <div className="studio-card upload-card compact-card">
+      <div className="studio-card-header compact-header">
+        <div className="studio-icon-badge mini" style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8' }}>
+          <UploadCloud size={16} />
         </div>
-        <div>
-          <h2 className="studio-card-title">Upload Gaming Short</h2>
-          <p className="studio-card-subtitle">Silent videos, chess puzzles & tricks</p>
+        <div className="compact-header-text">
+          <h2 className="studio-card-title compact-title">Upload Gaming Short</h2>
+          <p className="studio-card-subtitle compact-subtitle">Silent clips, chess moves & puzzles</p>
         </div>
       </div>
 
@@ -126,59 +126,64 @@ export default function VideoUploader({ onUploadSuccess, channelHandle = '@Samak
       />
 
       <div
-        className={`upload-dropzone ${isDragging ? 'dragging' : ''} ${isUploading ? 'uploading' : ''}`}
+        className={`upload-dropzone compact-dropzone ${isDragging ? 'dragging' : ''} ${isUploading ? 'uploading' : ''}`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onClick={() => !isUploading && fileInputRef.current?.click()}
       >
-        <div className="upload-dropzone-inner">
-          <div className="upload-icon-circle">
+        <div className="compact-dropzone-content">
+          <div className="compact-upload-icon-circle">
             {isUploading ? (
-              <FileVideo size={28} className="animate-pulse" color="#38bdf8" />
+              <FileVideo size={18} className="animate-pulse" color="#38bdf8" />
             ) : (
-              <UploadCloud size={30} color="#38bdf8" />
+              <UploadCloud size={18} color="#38bdf8" />
             )}
           </div>
 
-          <div className="upload-text-wrap">
+          <div className="compact-upload-text">
             <span className="upload-main-text">
-              {isUploading ? 'Uploading Clip...' : 'Click or Drag & Drop Video'}
+              {isUploading ? 'Uploading Video...' : 'Drop video or click to browse'}
             </span>
             <span className="upload-sub-text">
-              MP4, MOV, WEBM (No audio needed)
+              MP4, MOV, WEBM • Up to 500MB
             </span>
           </div>
-
-          {isUploading && (
-            <div className="upload-progress-container">
-              <div className="upload-progress-bar">
-                <div
-                  className="upload-progress-fill"
-                  style={{ width: `${uploadProgress}%` }}
-                />
-              </div>
-              <span className="upload-percent-text">{uploadProgress}%</span>
-            </div>
-          )}
         </div>
+
+        {isUploading && (
+          <div className="compact-progress-row">
+            <div className="upload-progress-bar">
+              <div
+                className="upload-progress-fill"
+                style={{ width: `${uploadProgress}%` }}
+              />
+            </div>
+            <span className="upload-percent-text">{uploadProgress}%</span>
+          </div>
+        )}
       </div>
 
       {error && (
-        <div className="sidebar-error-box compact" style={{ marginTop: '0.75rem' }}>
-          <AlertCircle size={15} color="#ef4444" style={{ flexShrink: 0 }} />
+        <div className="sidebar-error-box compact" style={{ marginTop: '0.45rem' }}>
+          <AlertCircle size={14} color="#ef4444" style={{ flexShrink: 0 }} />
           <span>{error}</span>
         </div>
       )}
 
-      <div className="upload-tips-box">
-        <div className="upload-tip-item">
-          <Sparkles size={13} color="#facc15" />
-          <span>Gemini Vision analyzes visual board moves with <strong>no audio</strong></span>
+      {/* Sleek feature chips row - replaces bulky multi-line box */}
+      <div className="compact-feature-chips">
+        <div className="feature-chip" title="Detects silent chess board moves with AI Vision">
+          <Sparkles size={11} color="#facc15" />
+          <span>Silent AI Vision</span>
         </div>
-        <div className="upload-tip-item">
-          <span style={{ fontSize: '0.75rem' }}>⏳</span>
-          <span>Adds <strong>5s countdown timer</strong> + "Comment your move" CTA</span>
+        <div className="feature-chip" title="5s interactive timer overlay">
+          <Timer size={11} color="#38bdf8" />
+          <span>5s Timer</span>
+        </div>
+        <div className="feature-chip" title="Comment your move watermark">
+          <MessageSquare size={11} color="#34d399" />
+          <span>Move CTA</span>
         </div>
       </div>
     </div>

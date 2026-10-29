@@ -479,14 +479,14 @@ export default function App() {
             />
           ) : (
             /* Mode 2: Haso Dil Khol K YouTube Downloader */
-            <div className="studio-card">
-              <div className="studio-card-header" style={{ marginBottom: '0.85rem' }}>
-                <div className="studio-icon-badge">
-                  <Download size={18} />
+            <div className="studio-card compact-card">
+              <div className="studio-card-header compact-header">
+                <div className="studio-icon-badge mini">
+                  <Download size={15} />
                 </div>
-                <div>
-                  <h2 className="studio-card-title">Download Video</h2>
-                  <p className="studio-card-subtitle">YouTube URL downloader</p>
+                <div className="compact-header-text">
+                  <h2 className="studio-card-title compact-title">Download Video</h2>
+                  <p className="studio-card-subtitle compact-subtitle">YouTube URL downloader</p>
                 </div>
               </div>
 
@@ -533,10 +533,10 @@ export default function App() {
           </div>
 
           {/* Workspace Summary Card */}
-          <div className="studio-card studio-stats-card">
+          <div className="studio-card studio-stats-card compact-card">
             <div className="stats-header-row">
               <div className="stats-title-wrap">
-                <HardDrive size={15} color="#38bdf8" />
+                <HardDrive size={14} color="#38bdf8" />
                 <span className="stats-card-title">Studio Library</span>
               </div>
               <span className="stats-total-pill">

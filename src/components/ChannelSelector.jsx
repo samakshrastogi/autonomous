@@ -7,73 +7,58 @@ export default function ChannelSelector({ activeChannel, onSelectChannel }) {
       id: 'haso_dil_khol_k',
       name: 'Haso Dil Khol K',
       handle: '@HasoDilKholK',
-      badge: 'Comedy & Entertainment',
+      badge: 'Comedy Clips',
       icon: Laugh,
-      color: '#ef4444',
-      bgGlow: 'rgba(239, 68, 68, 0.15)',
-      desc: 'YouTube video downloads & viral Hinglish comedy shorts'
+      color: '#ef4444'
     },
     {
       id: 'samaksh_gaming',
       name: 'Samaksh Gaming',
       handle: '@SamakshGaming',
-      badge: 'Chess, Puzzles & Moves',
+      badge: 'Puzzle Moves',
       icon: Gamepad2,
-      color: '#38bdf8',
-      bgGlow: 'rgba(56, 189, 248, 0.15)',
-      desc: 'Silent video uploads, 5s countdown timer & puzzle questions'
+      color: '#38bdf8'
     }
   ];
 
   return (
-    <div className="studio-card channel-selector-card">
+    <div className="studio-card channel-selector-card compact-card">
       <div className="channel-selector-header">
-        <span className="channel-selector-title">Active Channel</span>
-        <span className="channel-active-indicator">
-          <span className="active-dot" />
-          {activeChannel === 'samaksh_gaming' ? 'Gaming Mode' : 'Comedy Mode'}
-        </span>
+        <span className="channel-selector-label">ACTIVE CHANNEL</span>
+        <div className={`channel-indicator-badge ${activeChannel === 'samaksh_gaming' ? 'gaming' : 'comedy'}`}>
+          <span className="channel-indicator-dot" />
+          <span>{activeChannel === 'samaksh_gaming' ? 'Gaming' : 'Comedy'}</span>
+        </div>
       </div>
 
-      <div className="channel-options-grid">
+      <div className="channel-segmented-control">
         {channels.map((chan) => {
           const Icon = chan.icon;
           const isActive = activeChannel === chan.id;
+          const isGaming = chan.id === 'samaksh_gaming';
 
           return (
             <button
               key={chan.id}
               type="button"
               onClick={() => onSelectChannel(chan.id)}
-              className={`channel-option-btn ${isActive ? 'active' : ''}`}
-              style={{
-                borderColor: isActive ? chan.color : undefined,
-                boxShadow: isActive ? `0 0 16px ${chan.bgGlow}` : undefined
-              }}
+              className={`channel-segment-btn ${isActive ? 'active' : ''} ${isGaming ? 'gaming-btn' : 'comedy-btn'}`}
+              title={`Switch to ${chan.name}`}
             >
-              <div className="channel-btn-top">
-                <div
-                  className="channel-icon-pill"
-                  style={{
-                    background: isActive ? chan.bgGlow : 'rgba(255, 255, 255, 0.05)',
-                    color: chan.color
-                  }}
-                >
-                  <Icon size={16} />
-                </div>
-                {isActive && (
-                  <div className="channel-check-pill" style={{ background: chan.color }}>
-                    <Check size={11} color="#ffffff" strokeWidth={3} />
-                  </div>
-                )}
+              <div className="segment-icon-box">
+                <Icon size={15} />
               </div>
 
-              <div className="channel-btn-info">
-                <div className="channel-btn-name">{chan.name}</div>
-                <div className="channel-btn-tag" style={{ color: isActive ? chan.color : '#94a3b8' }}>
-                  {chan.badge}
-                </div>
+              <div className="segment-details">
+                <span className="segment-title">{chan.name}</span>
+                <span className="segment-badge">{chan.badge}</span>
               </div>
+
+              {isActive && (
+                <div className="segment-check-bubble">
+                  <Check size={10} strokeWidth={3} />
+                </div>
+              )}
             </button>
           );
         })}
