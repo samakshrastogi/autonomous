@@ -276,3 +276,172 @@ Return ONLY a valid JSON array of 5 strings, e.g.:
   }
   return defaultHooks;
 }
+
+// Analyze a silent or gaming video (Chess, puzzles, gaming clips, tricks) without relying on audio
+export async function analyzeGamingVideoWithoutAudio({ videoPath, filename, apiKey, sendEvent }) {
+  const key = (apiKey || process.env.GEMINI_API_KEY || '').trim();
+  if (!key) {
+    throw new Error('Gemini API key is required for video analysis.');
+  }
+
+  const fileManager = new GoogleAIFileManager(key);
+  const genAI = new GoogleGenerativeAI(key);
+
+  let uploadedFile = null;
+
+  try {
+    if (sendEvent) {
+      sendEvent('status', { phase: 'uploading', message: 'Uploading gaming video to Gemini Vision...' });
+    }
+
+    // 1. Upload video file directly to Gemini File API
+    uploadedFile = await fileManager.uploadFile(videoPath, {
+      mimeType: 'video/mp4',
+      displayName: `gaming_${path.basename(filename)}`
+    });
+
+    if (sendEvent) {
+      sendEvent('status', { phase: 'processing', message: 'Gemini Vision inspecting video frames...' });
+    }
+
+    // Wait for Gemini to process the video frames if necessary
+    let fileInfo = await fileManager.getFile(uploadedFile.file.name);
+    let attempts = 0;
+    while (fileInfo.state === 'PROCESSING' && attempts < 30) {
+      await new Promise((r) => setTimeout(r, 2000));
+      fileInfo = await fileManager.getFile(uploadedFile.file.name);
+      attempts++;
+    }
+
+    if (fileInfo.state === 'FAILED') {
+      throw new Error('Gemini Vision processing failed for this video file.');
+    }
+
+    if (sendEvent) {
+      sendEvent('status', { phase: 'analyzing', message: 'Generating exciting moves & puzzle questions...' });
+    }
+
+    const detectedModel = await resolveGeminiModel(key);
+
+    const prompt = `You are a viral YouTube Shorts & Reels expert for Gaming, Chess, Brain Teasers, and Strategy Puzzles (Channel: Samaksh Gaming).
+Carefully watch and analyze the VISUAL gameplay in this video. NOTE: This video may have NO spoken dialogue, so analyze the visual moves, board setup, traps, tactics, actions, and puzzle challenges shown on screen.
+
+YOUR GOAL:
+1. Identify the puzzle, trick, or move shown in the video (e.g. Chess tactic, Mate in 2, Trap, Tricky puzzle, Winning move).
+2. Create an ULTRA-EXCITING TOP HOOK / QUESTION that excites viewers to stop scrolling, think, and answer the puzzle.
+   - Requirements:
+     - Under 45 characters.
+     - Conversational and thrilling with relevant emojis (♟️, 🧠, 🤯, 🔥, 👀).
+     - Examples: "White to move: Win in 2 moves! ♟️🔥", "Can you solve this puzzle?! 🤯", "Grandmaster Trap! What's the move? 👀", "99% People Fail This Move! 😱"
+3. Provide "suggestedHooks": An array of EXACTLY 5 best, distinct, high-curiosity questions/hooks tailored specifically to this video's moves.
+4. Provide "solution": A brief 1-2 sentence solution / answer so the creator can easily copy and pin it in the YouTube comments!
+5. Provide "bottomText": "Comment your move 👇"
+
+Return ONLY a valid JSON object with the exact schema:
+{
+  "title": "Short descriptive title without the word Short (under 50 chars)",
+  "hook": "Best exciting puzzle challenge question (under 45 chars with emojis)",
+  "suggestedHooks": [
+    "Hook option 1...",
+    "Hook option 2...",
+    "Hook option 3...",
+    "Hook option 4...",
+    "Hook option 5..."
+  ],
+  "solution": "Brief winning move or puzzle answer for pinned comment",
+  "bottomText": "Comment your move 👇"
+}`;
+
+    const candidateModels = [
+      detectedModel,
+      'gemini-1.5-flash',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash-latest',
+      'gemini-1.5-pro'
+    ];
+    const uniqueModels = [...new Set(candidateModels)];
+
+    let responseText = '';
+    let lastError = null;
+
+    for (const modelName of uniqueModels) {
+      try {
+        console.log(`[Gemini Vision] Attempting model: ${modelName}`);
+        const model = genAI.getGenerativeModel({ model: modelName });
+        const result = await model.generateContent([
+          {
+            fileData: {
+              mimeType: uploadedFile.file.mimeType,
+              fileUri: uploadedFile.file.uri
+            }
+          },
+          { text: prompt }
+        ]);
+        responseText = result.response.text();
+        if (responseText) {
+          console.log(`[Gemini Vision] Succeeded with model: ${modelName}`);
+          break;
+        }
+      } catch (err) {
+        console.warn(`[Gemini Vision] Model ${modelName} returned: ${err.message}`);
+        lastError = err;
+        if (err.message && (err.message.includes('429') || err.message.toLowerCase().includes('quota') || err.message.includes('resourceexhausted'))) {
+          break;
+        }
+      }
+    }
+
+    if (!responseText && lastError) {
+      if (lastError.message && (lastError.message.includes('429') || lastError.message.toLowerCase().includes('quota') || lastError.message.includes('resourceexhausted'))) {
+        const retryMatch = lastError.message.match(/retry in ([\d\.]+)s/i);
+        const retrySec = retryMatch ? Math.ceil(parseFloat(retryMatch[1])) : 60;
+        throw new Error(`QUOTA_LIMIT: Gemini Free Tier quota reached (15 req/min). Resets in ~${retrySec}s. Please wait or use another key.`);
+      }
+      throw lastError;
+    }
+
+    let parsedResult = null;
+    try {
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        parsedResult = JSON.parse(jsonMatch[0]);
+      }
+    } catch (e) {
+      console.error('Failed to parse Gemini Gaming JSON:', responseText);
+    }
+
+    if (!parsedResult) {
+      parsedResult = {
+        title: path.basename(filename, path.extname(filename)),
+        hook: 'Can you solve this puzzle?! 🤯',
+        suggestedHooks: [
+          'Can you solve this puzzle?! 🤯',
+          'Find the winning move! 🧠⏳',
+          'White to move: Win in 2 moves! ♟️🔥',
+          'Only 1% of players spot this! 👀',
+          "Don't miss the secret move! ⚡"
+        ],
+        solution: 'Comment your answer and check back for the pinned solution!',
+        bottomText: 'Comment your move 👇'
+      };
+    }
+
+    // Save to metadata
+    const meta = readVideoMetadata(videoPath);
+    meta.title = parsedResult.title || meta.title || filename;
+    meta.hook = parsedResult.hook;
+    meta.suggestedHooks = Array.isArray(parsedResult.suggestedHooks) ? parsedResult.suggestedHooks.slice(0, 5) : [];
+    meta.solution = parsedResult.solution || '';
+    meta.bottomText = parsedResult.bottomText || 'Comment your move 👇';
+    meta.channelMode = 'gaming';
+    saveVideoMetadata(videoPath, meta);
+
+    return parsedResult;
+  } finally {
+    if (uploadedFile?.file?.name) {
+      try {
+        await fileManager.deleteFile(uploadedFile.file.name);
+      } catch (e) {}
+    }
+  }
+}

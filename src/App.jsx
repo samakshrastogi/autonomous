@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import { Download, Clock, CheckCircle2, Sparkles, HardDrive } from 'lucide-react';
+import { Download, Clock, CheckCircle2, Sparkles, HardDrive, Gamepad2 } from 'lucide-react';
 import Header from './components/Header.jsx';
 import DownloadForm from './components/DownloadForm.jsx';
 import DownloadProgress from './components/DownloadProgress.jsx';
 import VideoGallery from './components/VideoGallery.jsx';
 import ShortsGeneratorSidebar from './components/ShortsGeneratorSidebar.jsx';
+import ChannelSelector from './components/ChannelSelector.jsx';
+import VideoUploader from './components/VideoUploader.jsx';
 
 // Dynamic code splitting: lazy-load modals on demand for faster initial page load
 const ApiKeyModal = lazy(() => import('./components/ApiKeyModal.jsx'));
@@ -23,12 +25,22 @@ export default function App() {
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [activeTab, setActiveTab] = useState('downloads'); // 'downloads' | 'drafts' | 'ready'
 
+  // Active Channel Switcher: 'haso_dil_khol_k' or 'samaksh_gaming'
+  const [activeChannel, setActiveChannel] = useState(() => {
+    return localStorage.getItem('shorts_studio_active_channel') || 'haso_dil_khol_k';
+  });
+
   // Gemini API Key state
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
 
-  // Channel Username Branding state
-  const [channelHandle, setChannelHandle] = useState(() => localStorage.getItem('shorts_channel_handle') || '');
+  // Channel Username Branding state (defaults to matching active channel)
+  const [channelHandle, setChannelHandle] = useState(() => {
+    const saved = localStorage.getItem('shorts_channel_handle');
+    if (saved) return saved;
+    const initialChan = localStorage.getItem('shorts_studio_active_channel') || 'haso_dil_khol_k';
+    return initialChan === 'samaksh_gaming' ? '@SamakshGaming' : '@HasoDilKholK';
+  });
   const [isChannelModalOpen, setIsChannelModalOpen] = useState(false);
 
   // Shorts Review & Text Burn modal state
@@ -110,6 +122,20 @@ export default function App() {
     localStorage.setItem('shorts_channel_handle', handle);
   };
 
+  const handleSelectChannel = (channelId) => {
+    setActiveChannel(channelId);
+    localStorage.setItem('shorts_studio_active_channel', channelId);
+    const targetHandle = channelId === 'samaksh_gaming' ? '@SamakshGaming' : '@HasoDilKholK';
+    setChannelHandle(targetHandle);
+    localStorage.setItem('shorts_channel_handle', targetHandle);
+  };
+
+  const handleUploadSuccess = (uploadedFile) => {
+    fetchRecentFiles();
+    setActiveTab('drafts');
+    handleOpenReviewModal(uploadedFile, 'Can you solve this puzzle?! 🤯');
+  };
+
   const handleOpenReviewModal = (file, hook = '') => {
     setSelectedShortForReview(file);
     setReviewInitialHook(hook || '');
@@ -120,7 +146,7 @@ export default function App() {
     handleOpenReviewModal(short, short.hook);
   };
 
-  const handleBurnText = async ({ filename, topText, channelHandle: customHandle }) => {
+  const handleBurnText = async ({ filename, topText, bottomText, channelHandle: customHandle, timerDuration }) => {
     setIsBurningText(true);
     try {
       const res = await fetch('/api/burn-text', {
@@ -129,7 +155,9 @@ export default function App() {
         body: JSON.stringify({
           filename,
           topText,
-          channelHandle: customHandle
+          bottomText,
+          channelHandle: customHandle,
+          timerDuration
         })
       });
 
@@ -437,26 +465,41 @@ export default function App() {
       <div className="dashboard-layout">
         {/* LEFT SIDE: All Input and Processing */}
         <aside className="dashboard-left">
-          {/* Download Card */}
-          <div className="studio-card">
-            <div className="studio-card-header" style={{ marginBottom: '0.85rem' }}>
-              <div className="studio-icon-badge">
-                <Download size={18} />
-              </div>
-              <div>
-                <h2 className="studio-card-title">Download Video</h2>
-              </div>
-            </div>
+          {/* Dual Channel Switcher: Haso Dil Khol K vs Samaksh Gaming */}
+          <ChannelSelector
+            activeChannel={activeChannel}
+            onSelectChannel={handleSelectChannel}
+          />
 
-            <DownloadForm
-              url={url}
-              setUrl={setUrl}
-              isDownloading={isDownloading}
-              onDownload={handleStartDownload}
-              cleanAndExtractUrl={cleanAndExtractUrl}
-              isYouTubeUrl={isYouTubeUrl}
+          {/* Mode 1: Samaksh Gaming Direct Clip Uploader */}
+          {activeChannel === 'samaksh_gaming' ? (
+            <VideoUploader
+              onUploadSuccess={handleUploadSuccess}
+              channelHandle={channelHandle}
             />
-          </div>
+          ) : (
+            /* Mode 2: Haso Dil Khol K YouTube Downloader */
+            <div className="studio-card">
+              <div className="studio-card-header" style={{ marginBottom: '0.85rem' }}>
+                <div className="studio-icon-badge">
+                  <Download size={18} />
+                </div>
+                <div>
+                  <h2 className="studio-card-title">Download Video</h2>
+                  <p className="studio-card-subtitle">YouTube URL downloader</p>
+                </div>
+              </div>
+
+              <DownloadForm
+                url={url}
+                setUrl={setUrl}
+                isDownloading={isDownloading}
+                onDownload={handleStartDownload}
+                cleanAndExtractUrl={cleanAndExtractUrl}
+                isYouTubeUrl={isYouTubeUrl}
+              />
+            </div>
+          )}
 
           {/* Processing Area */}
           <div className="processing-section">
@@ -584,6 +627,7 @@ export default function App() {
             shortFile={selectedShortForReview}
             initialHook={reviewInitialHook}
             channelHandle={channelHandle}
+            activeChannel={activeChannel}
             onBurnText={handleBurnText}
             isProcessing={isBurningText}
             apiKey={apiKey}

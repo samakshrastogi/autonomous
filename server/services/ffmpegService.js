@@ -238,9 +238,9 @@ export function getBrowserExecutable() {
 }
 
 // Generate an ultra-high resolution transparent overlay PNG via headless Chrome/Edge
-// This renders true full-color Unicode emojis (🤣, 🤩, etc.), rounded corners, glowing borders,
+// This renders true full-color Unicode emojis (🤣, ♟️, 🤯, etc.), rounded corners, glowing borders,
 // and exact human-designed aesthetics matching the live React preview.
-export async function generateShortsOverlayPng({ topText, channelHandle, outputPath }) {
+export async function generateShortsOverlayPng({ topText, bottomText, channelHandle, outputPath }) {
   const browserPath = getBrowserExecutable();
   if (!browserPath) {
     throw new Error('No Chromium browser found for rendering overlay');
@@ -259,6 +259,7 @@ export async function generateShortsOverlayPng({ topText, channelHandle, outputP
     .replace(/'/g, '&#039;');
 
   const safeTopHtml = escapeHtml(wrappedText);
+  const safeBottomHtml = escapeHtml(bottomText && bottomText.trim() ? bottomText.trim() : '');
   const safeHandleHtml = escapeHtml(safeHandle);
 
   const html = `<!DOCTYPE html>
@@ -277,15 +278,15 @@ export async function generateShortsOverlayPng({ topText, channelHandle, outputP
   }
   .hook-title-card {
     position: absolute;
-    top: 270px;
+    top: 250px;
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(0, 0, 0, 0.82);
-    border: 3px solid rgba(250, 204, 21, 0.45);
-    border-radius: 20px;
-    padding: 16px 32px;
-    box-shadow: 0 10px 35px rgba(0, 0, 0, 0.9);
-    max-width: 940px;
+    background: rgba(0, 0, 0, 0.85);
+    border: 3.5px solid rgba(250, 204, 21, 0.55);
+    border-radius: 24px;
+    padding: 18px 36px;
+    box-shadow: 0 12px 38px rgba(0, 0, 0, 0.92);
+    max-width: 960px;
     text-align: center;
     width: max-content;
   }
@@ -298,18 +299,39 @@ export async function generateShortsOverlayPng({ topText, channelHandle, outputP
     word-break: break-word;
     white-space: pre-line;
   }
-  .watermark-pill {
+  .bottom-branding-group {
     position: absolute;
-    bottom: 420px;
+    bottom: 380px;
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(0, 0, 0, 0.72);
-    border: 2px solid rgba(255, 255, 255, 0.35);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    width: max-content;
+    max-width: 960px;
+  }
+  .cta-comment-pill {
+    background: rgba(15, 23, 42, 0.9);
+    border: 3px solid rgba(56, 189, 248, 0.7);
     border-radius: 9999px;
-    padding: 12px 28px;
+    padding: 16px 36px;
+    color: #38bdf8;
+    font-size: 38px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.85), 0 0 24px rgba(56, 189, 248, 0.4);
+    text-align: center;
+    white-space: nowrap;
+  }
+  .watermark-pill {
+    background: rgba(0, 0, 0, 0.78);
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-radius: 9999px;
+    padding: 10px 28px;
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.75);
     color: #ffffff;
-    font-size: 36px;
+    font-size: 32px;
     font-weight: 700;
     letter-spacing: 0.02em;
     text-align: center;
@@ -323,10 +345,17 @@ export async function generateShortsOverlayPng({ topText, channelHandle, outputP
     <div class="hook-title-text">${safeTopHtml}</div>
   </div>` : ''}
 
-  ${safeHandleHtml ? `
-  <div class="watermark-pill">
-    ${safeHandleHtml}
-  </div>` : ''}
+  <div class="bottom-branding-group">
+    ${safeBottomHtml ? `
+    <div class="cta-comment-pill">
+      ${safeBottomHtml}
+    </div>` : ''}
+
+    ${safeHandleHtml ? `
+    <div class="watermark-pill">
+      ${safeHandleHtml}
+    </div>` : ''}
+  </div>
 </body>
 </html>`;
 
@@ -354,17 +383,20 @@ export async function burnTextToShort({
   filename,
   originalFilename,
   topText,
+  bottomText,
   channelHandle,
   tempOutputPath,
   finalReadyPath,
-  hookDuration = 0
+  hookDuration = 0,
+  timerDuration = 0
 }) {
   const tempFilesTracker = [];
   try {
     const hasTop = topText && typeof topText === 'string' && topText.trim();
+    const hasBottom = bottomText && typeof bottomText === 'string' && bottomText.trim();
     const hasHandle = channelHandle && typeof channelHandle === 'string' && channelHandle.trim();
-    if (!hasTop && !hasHandle) {
-      throw new Error('Please enter top hook text or a channel watermark to apply.');
+    if (!hasTop && !hasBottom && !hasHandle) {
+      throw new Error('Please enter top hook text, bottom comment text, or a channel watermark to apply.');
     }
 
     let meta = readVideoMetadata(videoPath);
@@ -377,6 +409,7 @@ export async function burnTextToShort({
     try {
       await generateShortsOverlayPng({
         topText: hasTop ? topText : '',
+        bottomText: hasBottom ? bottomText : '',
         channelHandle: hasHandle ? channelHandle : '',
         outputPath: overlayPngPath
       });
@@ -391,10 +424,19 @@ export async function burnTextToShort({
     const sourceFound = meta.sourceVideo ? findVideoFile(meta.sourceVideo) : null;
     const overlayEnable = (hookDuration && hookDuration > 0) ? `:enable='between(t,0,${hookDuration})'` : '';
 
+    // 5-second countdown timer filter if enabled
+    const timerSec = Number(timerDuration) || 0;
+    const hasTimer = timerSec > 0;
+    const timerDrawFilter = hasTimer
+      ? `drawtext=fontfile='/Windows/Fonts/arialbd.ttf':text='⏳ 0%{eif\\:max(1\\, ${timerSec}-t)\\:d}s':x=(w-tw)/2:y=470:fontsize=48:fontcolor=0xfacc15:box=1:boxcolor=0x000000D0:boxborderw=16:enable='between(t\\,0\\,${timerSec})',drawtext=fontfile='/Windows/Fonts/arialbd.ttf':text='TIME UP! 🔥':x=(w-tw)/2:y=470:fontsize=48:fontcolor=0xef4444:box=1:boxcolor=0x000000D0:boxborderw=16:enable='between(t\\,${timerSec}\\,${timerSec + 1.5})'`
+      : '';
+
     if (sourceFound && sourceFound.foundPath && fs.existsSync(sourceFound.foundPath) && meta.start && meta.end) {
       // Clean re-render from pristine source video
       if (overlaySuccess) {
-        const filterGraph = `split[a][b];[a]scale=180:320:force_original_aspect_ratio=increase,crop=180:320,boxblur=5:2,scale=1080:1920[bg];[b]scale=1080:-1[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2[base];[base][1:v]overlay=0:0${overlayEnable}`;
+        const filterGraph = hasTimer
+          ? `split[a][b];[a]scale=180:320:force_original_aspect_ratio=increase,crop=180:320,boxblur=5:2,scale=1080:1920[bg];[b]scale=1080:-1[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2[base];[base][1:v]overlay=0:0${overlayEnable}[ov];[ov]${timerDrawFilter}`
+          : `split[a][b];[a]scale=180:320:force_original_aspect_ratio=increase,crop=180:320,boxblur=5:2,scale=1080:1920[bg];[b]scale=1080:-1[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2[base];[base][1:v]overlay=0:0${overlayEnable}`;
         ffmpegCmd = `ffmpeg -ss ${meta.start} -to ${meta.end} -i "${sourceFound.foundPath}" -i "${overlayPngPath}" -filter_complex "${filterGraph}" -preset ultrafast -c:v libx264 -crf 23 -c:a aac -threads 0 -y "${tempOutputPath}"`;
       } else {
         const drawFilters = buildDrawTextFilters(topText, channelHandle, tempFilesTracker, hookDuration);
@@ -404,7 +446,10 @@ export async function burnTextToShort({
     } else {
       // Apply overlay directly onto current video
       if (overlaySuccess) {
-        ffmpegCmd = `ffmpeg -i "${videoPath}" -i "${overlayPngPath}" -filter_complex "[0:v][1:v]overlay=0:0${overlayEnable}" -preset ultrafast -c:v libx264 -crf 23 -c:a copy -threads 0 -y "${tempOutputPath}"`;
+        const filterGraph = hasTimer
+          ? `[0:v][1:v]overlay=0:0${overlayEnable}[ov];[ov]${timerDrawFilter}`
+          : `[0:v][1:v]overlay=0:0${overlayEnable}`;
+        ffmpegCmd = `ffmpeg -i "${videoPath}" -i "${overlayPngPath}" -filter_complex "${filterGraph}" -preset ultrafast -c:v libx264 -crf 23 -c:a copy -threads 0 -y "${tempOutputPath}"`;
       } else {
         const drawFilters = buildDrawTextFilters(topText, channelHandle, tempFilesTracker, hookDuration);
         ffmpegCmd = `ffmpeg -i "${videoPath}" -vf "${drawFilters}" -preset ultrafast -c:v libx264 -crf 23 -c:a copy -threads 0 -y "${tempOutputPath}"`;

@@ -2,20 +2,46 @@ import express from 'express';
 import { exec } from 'child_process';
 import path from 'path';
 import fs from 'fs';
+import multer from 'multer';
 import {
   ROOT_VIDEOS_DIR,
   FOLDERS,
   getAllVideoFiles,
   findVideoFile,
   PROJECT_ROOT,
-  deleteVideoMetadata
+  deleteVideoMetadata,
+  readVideoMetadata,
+  saveVideoMetadata
 } from '../config.js';
 import { registerEventsClient, broadcastFilesUpdate } from '../watcher.js';
-import { analyzeVideoAudioForShorts, generateSuggestedHooks } from '../services/geminiService.js';
+import {
+  analyzeVideoAudioForShorts,
+  generateSuggestedHooks,
+  analyzeGamingVideoWithoutAudio
+} from '../services/geminiService.js';
 import { renderShortsInParallel, burnTextToShort, sanitizeShortsFilename } from '../services/ffmpegService.js';
 import { startVideoDownload } from '../services/downloadService.js';
 
 const router = express.Router();
+
+// Multer storage for direct video clip uploads into 02_Shorts_Drafts
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    if (!fs.existsSync(FOLDERS.SHORTS_DRAFTS)) {
+      try { fs.mkdirSync(FOLDERS.SHORTS_DRAFTS, { recursive: true }); } catch (e) {}
+    }
+    cb(null, FOLDERS.SHORTS_DRAFTS);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname) || '.mp4';
+    const base = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_\-\s]/g, '').trim() || 'Uploaded_Short';
+    cb(null, `${base}_${Date.now()}${ext}`);
+  }
+});
+const upload = multer({
+  storage,
+  limits: { fileSize: 500 * 1024 * 1024 } // 500MB
+});
 
 // Real-Time Events SSE endpoint
 router.get('/events', (req, res) => {
@@ -243,6 +269,87 @@ router.post('/generate-shorts', async (req, res) => {
   }
 });
 
+// Upload video clip directly (for Samaksh Gaming or custom shorts)
+router.post('/upload-video', upload.single('video'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No video file provided.' });
+  }
+
+  const uploadedFilename = req.file.filename;
+  const uploadedPath = req.file.path;
+
+  // Retrieve duration via ffprobe / ffmpeg
+  exec(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${uploadedPath}"`, (err, stdout) => {
+    let duration = 30;
+    if (!err && stdout && !isNaN(parseFloat(stdout))) {
+      duration = Math.round(parseFloat(stdout));
+    }
+
+    const cleanTitle = path.basename(req.file.originalname, path.extname(req.file.originalname));
+    saveVideoMetadata(uploadedPath, {
+      title: cleanTitle,
+      duration,
+      uploadedAt: Date.now(),
+      channelMode: req.body.channelMode || 'gaming'
+    });
+
+    broadcastFilesUpdate();
+
+    res.json({
+      success: true,
+      message: 'Video uploaded successfully!',
+      file: {
+        name: uploadedFilename,
+        title: cleanTitle,
+        duration,
+        category: 'drafts',
+        categoryLabel: 'Pre Ready Shorts',
+        subfolder: '02_Shorts_Drafts',
+        url: `/api/video/02_Shorts_Drafts/${encodeURIComponent(uploadedFilename)}`
+      }
+    });
+  });
+});
+
+// Analyze silent/gaming video for puzzles and exciting moves (Samaksh Gaming mode)
+router.post('/analyze-gaming', async (req, res) => {
+  const { filename, apiKey } = req.body;
+  const key = apiKey || process.env.GEMINI_API_KEY;
+
+  if (!key || typeof key !== 'string' || !key.trim()) {
+    return res.status(400).json({ error: 'Gemini API key is required.' });
+  }
+
+  if (!filename) {
+    return res.status(400).json({ error: 'Video filename is required.' });
+  }
+
+  const fileInfo = findVideoFile(filename);
+  if (!fileInfo) {
+    return res.status(404).json({ error: 'Video file not found on disk.' });
+  }
+
+  try {
+    const analysis = await analyzeGamingVideoWithoutAudio({
+      videoPath: fileInfo.foundPath,
+      filename,
+      apiKey: key
+    });
+
+    broadcastFilesUpdate();
+    res.json({ success: true, ...analysis });
+  } catch (err) {
+    console.error('[Gaming Analysis Error]:', err);
+    let userMsg = err.message || 'AI Gaming analysis failed.';
+    if (userMsg.includes('429') || userMsg.toLowerCase().includes('quota') || userMsg.includes('resourceexhausted')) {
+      const retryMatch = userMsg.match(/retry in ([\d\.]+)s/i);
+      const retrySec = retryMatch ? Math.ceil(parseFloat(retryMatch[1])) : 60;
+      userMsg = `QUOTA_LIMIT: Gemini Free Tier quota reached (15 req/min). Resets in ~${retrySec}s. Please wait a moment or switch your API key.`;
+    }
+    res.status(500).json({ error: userMsg, raw: err.message });
+  }
+});
+
 // Suggest 5 best viral hooks for a Short
 router.post('/suggest-hooks', async (req, res) => {
   const { filename, title, apiKey } = req.body;
@@ -254,9 +361,9 @@ router.post('/suggest-hooks', async (req, res) => {
   }
 });
 
-// Burn custom top hook text (for 5s) & channel handle
+// Burn custom top hook text, bottom comment text (for 5s) & channel handle
 router.post('/burn-text', async (req, res) => {
-  const { filename, topText, channelHandle, hookDuration = 0 } = req.body;
+  const { filename, topText, bottomText, channelHandle, hookDuration = 0, timerDuration = 0 } = req.body;
   if (!filename) {
     return res.status(400).json({ error: 'Filename is required' });
   }
@@ -281,11 +388,21 @@ router.post('/burn-text', async (req, res) => {
       filename: destinationFilename,
       originalFilename: filename,
       topText,
+      bottomText,
       channelHandle,
       tempOutputPath,
       finalReadyPath,
-      hookDuration: Number(hookDuration) || 0
+      hookDuration: Number(hookDuration) || 0,
+      timerDuration: Number(timerDuration) || 0
     });
+
+    // Update metadata
+    const meta = readVideoMetadata(finalReadyPath);
+    if (topText) meta.hook = topText;
+    if (bottomText) meta.bottomText = bottomText;
+    if (channelHandle) meta.channelHandle = channelHandle;
+    meta.timerDuration = Number(timerDuration) || 0;
+    saveVideoMetadata(finalReadyPath, meta);
 
     broadcastFilesUpdate();
 

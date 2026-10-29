@@ -12,7 +12,12 @@ import {
   Clock,
   CheckCircle2,
   Flame,
-  Cpu
+  Cpu,
+  Gamepad2,
+  Timer,
+  MessageSquare,
+  Copy,
+  BrainCircuit
 } from 'lucide-react';
 
 const cleanShortTitle = (rawName) => {
@@ -26,6 +31,14 @@ const DEFAULT_FALLBACK_HOOKS = [
   "Bhai ne yeh kya bol diya?! 🤯",
   "Dhyan se dekho end me kya hua 👀",
   "Don't miss the climax! 🔥"
+];
+
+const DEFAULT_GAMING_HOOKS = [
+  "Can you solve this puzzle?! 🤯",
+  "White to move: Win in 2 moves! ♟️🔥",
+  "Find the winning move! 🧠⏳",
+  "Grandmaster Trap! What's the move? 👀",
+  "99% People Fail This Move! 😱"
 ];
 
 const BURN_STAGES = [
@@ -53,8 +66,8 @@ const BURN_STAGES = [
   {
     step: 4,
     label: 'Branding',
-    title: 'Burning Retention Hook & Handle',
-    desc: 'Applying viral title card and channel watermark...',
+    title: 'Burning Retention Hook, Timer & CTA',
+    desc: 'Applying viral title card, 5s countdown timer & channel branding...',
     badge: 'Stage 4/5'
   },
   {
@@ -72,14 +85,23 @@ export default function ShortsReviewModal({
   shortFile,
   initialHook,
   channelHandle,
+  activeChannel = 'haso_dil_khol_k',
   onBurnText,
   isProcessing,
   apiKey
 }) {
+  const isGaming = activeChannel === 'samaksh_gaming' || shortFile?.channelMode === 'gaming';
+
   const [topText, setTopText] = useState('');
+  const [bottomText, setBottomText] = useState(isGaming ? 'Comment your move 👇' : '');
   const [handle, setHandle] = useState('');
+  const [showTimer, setShowTimer] = useState(isGaming);
+  const [timerDuration, setTimerDuration] = useState(5);
+  const [solution, setSolution] = useState('');
   const [suggestedHooks, setSuggestedHooks] = useState([]);
   const [loadingHooks, setLoadingHooks] = useState(false);
+  const [isAnalyzingVision, setIsAnalyzingVision] = useState(false);
+  const [copiedSolution, setCopiedSolution] = useState(false);
   const [error, setError] = useState('');
   const [currentTime, setCurrentTime] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -176,32 +198,69 @@ export default function ShortsReviewModal({
     } finally {
       setLoadingHooks(false);
     }
-    return DEFAULT_FALLBACK_HOOKS;
+    return isGaming ? DEFAULT_GAMING_HOOKS : DEFAULT_FALLBACK_HOOKS;
+  };
+
+  // Analyze silent gaming video with Gemini Vision (No Audio required)
+  const handleAnalyzeGamingVision = async () => {
+    if (!shortFile || isAnalyzingVision || isProcessing) return;
+    setIsAnalyzingVision(true);
+    setError('');
+    try {
+      const res = await fetch('/api/analyze-gaming', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename: shortFile.name,
+          apiKey: apiKey || localStorage.getItem('gemini_api_key') || ''
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Gemini Vision analysis failed.');
+      }
+      if (data.hook) setTopText(data.hook);
+      if (Array.isArray(data.suggestedHooks) && data.suggestedHooks.length > 0) {
+        setSuggestedHooks(data.suggestedHooks.slice(0, 5));
+      }
+      if (data.solution) setSolution(data.solution);
+      if (data.bottomText) setBottomText(data.bottomText);
+      setShowTimer(true);
+    } catch (err) {
+      setError(err.message || 'Vision analysis could not complete.');
+    } finally {
+      setIsAnalyzingVision(false);
+    }
   };
 
   useEffect(() => {
     if (isOpen && shortFile) {
-      const savedHandle = channelHandle || localStorage.getItem('shorts_channel_handle') || '';
+      const isGamingMode = activeChannel === 'samaksh_gaming' || shortFile.channelMode === 'gaming';
+      setShowTimer(isGamingMode);
+      setTimerDuration(shortFile.timerDuration || 5);
+      setBottomText(shortFile.bottomText || (isGamingMode ? 'Comment your move 👇' : ''));
+      setSolution(shortFile.solution || '');
+
+      const defaultHandle = isGamingMode ? '@SamakshGaming' : '@HasoDilKholK';
+      const savedHandle = channelHandle || localStorage.getItem('shorts_channel_handle') || defaultHandle;
       setHandle(savedHandle);
       setError('');
 
-      // Check if file already has suggestedHooks from Gemini
       if (Array.isArray(shortFile.suggestedHooks) && shortFile.suggestedHooks.length > 0) {
         const hooks = shortFile.suggestedHooks.slice(0, 5);
         setSuggestedHooks(hooks);
-        setTopText(initialHook || hooks[0] || '');
+        setTopText(initialHook || shortFile.hook || hooks[0] || '');
       } else {
-        // Fetch fresh 5 suggestions from Gemini
         fetchGeminiHooks(shortFile).then((hooks) => {
           if (hooks && hooks.length > 0) {
             setTopText(initialHook || hooks[0] || '');
           } else {
-            setTopText(initialHook || DEFAULT_FALLBACK_HOOKS[0]);
+            setTopText(initialHook || (isGamingMode ? DEFAULT_GAMING_HOOKS[0] : DEFAULT_FALLBACK_HOOKS[0]));
           }
         });
       }
     }
-  }, [isOpen, shortFile, initialHook, channelHandle]);
+  }, [isOpen, shortFile, initialHook, channelHandle, activeChannel]);
 
   // Close on 'Escape' key when not processing
   useEffect(() => {
@@ -232,10 +291,18 @@ export default function ShortsReviewModal({
     }
   };
 
+  const handleCopySolution = () => {
+    if (solution) {
+      navigator.clipboard.writeText(solution);
+      setCopiedSolution(true);
+      setTimeout(() => setCopiedSolution(false), 2000);
+    }
+  };
+
   const handleApply = async (e) => {
     e.preventDefault();
-    if (!topText.trim() && !handle.trim()) {
-      setError('Please provide a top title/hook or a channel watermark.');
+    if (!topText.trim() && !handle.trim() && !bottomText.trim()) {
+      setError('Please provide a top challenge/hook, comment text, or channel handle.');
       return;
     }
 
@@ -249,7 +316,9 @@ export default function ShortsReviewModal({
       await onBurnText({
         filename: shortFile.name,
         topText: topText.trim(),
-        channelHandle: cleanHandle
+        bottomText: bottomText.trim(),
+        channelHandle: cleanHandle,
+        timerDuration: showTimer ? timerDuration : 0
       });
       setIsSuccess(true);
       setProgressPercent(100);
@@ -268,15 +337,27 @@ export default function ShortsReviewModal({
         {/* Modal Header */}
         <div className="modal-header review-modal-header">
           <div className="review-header-title-box">
-            <div className="review-header-icon-glow">
-              <Sparkles size={18} color="#ef4444" />
+            <div
+              className="review-header-icon-glow"
+              style={{
+                background: isGaming ? 'rgba(56, 189, 248, 0.15)' : 'rgba(239, 68, 68, 0.12)',
+                borderColor: isGaming ? 'rgba(56, 189, 248, 0.35)' : 'rgba(239, 68, 68, 0.3)'
+              }}
+            >
+              {isGaming ? (
+                <Gamepad2 size={18} color="#38bdf8" />
+              ) : (
+                <Sparkles size={18} color="#ef4444" />
+              )}
             </div>
             <div>
               <h3 className="review-header-title">
-                Customize Short & Branding
+                {isGaming ? 'Customize Gaming Short & Challenge' : 'Customize Short & Retention Hook'}
               </h3>
               <p className="review-header-subtitle">
-                Add viral title/hook and channel watermark with live visual preview
+                {isGaming
+                  ? 'Add puzzle question, 5s countdown timer & "Comment your move" CTA'
+                  : 'Add viral title/hook and channel watermark with live visual preview'}
               </p>
             </div>
           </div>
@@ -316,7 +397,7 @@ export default function ShortsReviewModal({
                 onPlay={() => setIsPaused(false)}
               />
 
-              {/* Live Overlay: Top Hook / Title (Active for whole video) */}
+              {/* Live Overlay: Top Hook / Puzzle Question */}
               {topText.trim() && (
                 <div className="review-top-text-overlay">
                   <div className="review-hook-badge">
@@ -325,12 +406,35 @@ export default function ShortsReviewModal({
                 </div>
               )}
 
-              {/* Live Overlay: Bottom Channel Username */}
-              {handle.trim() && (
-                <div className="review-bottom-handle-overlay">
-                  <div className="handle-pill">
-                    {handle.startsWith('@') ? handle : `@${handle}`}
+              {/* Live Overlay: 5-Second Countdown Timer Badge */}
+              {showTimer && (
+                <div className="review-timer-overlay">
+                  <div className="review-timer-badge">
+                    <span className="timer-badge-icon">⏳</span>
+                    <span className="timer-badge-digits">
+                      {currentTime <= timerDuration
+                        ? `0${Math.max(1, Math.ceil(timerDuration - currentTime))}s`
+                        : currentTime <= timerDuration + 1.5
+                        ? "TIME'S UP! 🔥"
+                        : null}
+                    </span>
                   </div>
+                </div>
+              )}
+
+              {/* Live Overlay: Bottom Comment CTA + Channel Handle */}
+              {(bottomText.trim() || handle.trim()) && (
+                <div className="review-bottom-branding-group">
+                  {bottomText.trim() && (
+                    <div className="review-cta-comment-pill">
+                      💬 {bottomText}
+                    </div>
+                  )}
+                  {handle.trim() && (
+                    <div className="handle-pill">
+                      {handle.startsWith('@') ? handle : `@${handle}`}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -341,10 +445,10 @@ export default function ShortsReviewModal({
                 <span>9:16 Live Preview</span>
               </div>
 
-              {topText.trim() && (
-                <div className="preview-hook-live-indicator">
-                  <Sparkles size={11} color="#facc15" />
-                  <span>Hook Active (Whole Video)</span>
+              {showTimer && (
+                <div className="preview-hook-live-indicator" style={{ color: '#38bdf8', borderColor: 'rgba(56, 189, 248, 0.3)' }}>
+                  <Timer size={11} color="#38bdf8" />
+                  <span>{timerDuration}s Timer Active</span>
                 </div>
               )}
             </div>
@@ -354,23 +458,52 @@ export default function ShortsReviewModal({
           <form className="review-controls-column" onSubmit={handleApply}>
             {/* Source Video Pill */}
             <div className="review-source-pill">
-              <Film size={14} color="#ef4444" style={{ flexShrink: 0 }} />
+              <Film size={14} color={isGaming ? '#38bdf8' : '#ef4444'} style={{ flexShrink: 0 }} />
               <span className="review-source-title">
                 {cleanShortTitle(shortFile.name)}
               </span>
             </div>
 
-            {/* Hook / Title Section */}
+            {/* AI Vision Gaming Analysis Quick Action (Samaksh Gaming Mode) */}
+            {isGaming && (
+              <div className="review-vision-bar">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                  <BrainCircuit size={15} color="#38bdf8" />
+                  <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#f8fafc' }}>
+                    Silent Clip? Gemini Vision
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAnalyzeGamingVision}
+                  disabled={isAnalyzingVision || isProcessing}
+                  className="review-vision-btn"
+                  title="Analyze visual puzzle moves with Gemini Vision (Works without audio)"
+                >
+                  <Sparkles size={12} className={isAnalyzingVision ? 'spin' : ''} />
+                  <span>{isAnalyzingVision ? 'Analyzing Frames...' : 'Analyze Moves & Puzzles'}</span>
+                </button>
+              </div>
+            )}
+
+            {/* Hook / Puzzle Challenge Question Section */}
             <div className="review-field-group">
               <div className="review-field-header">
                 <label className="review-field-label">
-                  <span className="dot-indicator" style={{ background: '#eab308' }}></span>
-                  <span>Retention Hook & Title (Whole Video)</span>
+                  <span
+                    className="dot-indicator"
+                    style={{ background: isGaming ? '#38bdf8' : '#eab308' }}
+                  ></span>
+                  <span>{isGaming ? 'Exciting Puzzle Question (Above Video)' : 'Retention Hook & Title'}</span>
                 </label>
-                <span className="review-tag-gold">Full Video Hook</span>
+                <span className={isGaming ? 'review-tag-cyan' : 'review-tag-gold'}>
+                  {isGaming ? 'Moves & Puzzle' : 'Full Video Hook'}
+                </span>
               </div>
               <p style={{ fontSize: '0.72rem', color: '#94a3b8', margin: '0 0 0.45rem', lineHeight: 1.35 }}>
-                Displays throughout the entire video to keep viewers engaged and maximize retention from 0s to the end.
+                {isGaming
+                  ? 'Excite viewers with the puzzle, moves, or trick to get them guessing and commenting below.'
+                  : 'Displays throughout the video to maximize viewer retention and interest.'}
               </p>
 
               <textarea
@@ -378,25 +511,25 @@ export default function ShortsReviewModal({
                 onChange={(e) => setTopText(e.target.value)}
                 onFocus={() => setIsEditingHook(true)}
                 onBlur={() => setIsEditingHook(false)}
-                placeholder="Type viral hook / title, or choose a Gemini suggestion below..."
+                placeholder={isGaming ? "e.g. White to move: Win in 2 moves! ♟️🔥" : "Type viral hook / title..."}
                 rows={2}
                 disabled={isProcessing}
                 className="review-textarea"
               />
 
-              {/* 5 Best Hook Suggestions from Gemini */}
+              {/* 5 Best Suggestions */}
               <div style={{ marginTop: '0.65rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
-                  <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#facc15', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                    <Sparkles size={12} color="#facc15" />
-                    5 Best Hooks (Gemini Suggestions)
+                  <span style={{ fontSize: '0.72rem', fontWeight: 700, color: isGaming ? '#38bdf8' : '#facc15', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <Sparkles size={12} color={isGaming ? '#38bdf8' : '#facc15'} />
+                    {isGaming ? '5 Exciting Move Suggestions' : '5 Best Hooks (Gemini Suggestions)'}
                   </span>
                   <button
                     type="button"
                     onClick={handleRefreshSuggestions}
                     disabled={loadingHooks || isProcessing}
                     className="review-refresh-btn"
-                    title="Generate 5 new hook suggestions with Gemini"
+                    title="Generate 5 new hook suggestions"
                   >
                     <RotateCw size={11} className={loadingHooks ? 'spin' : ''} />
                     <span>{loadingHooks ? 'Generating...' : 'Refresh'}</span>
@@ -412,10 +545,8 @@ export default function ShortsReviewModal({
                         type="button"
                         disabled={isProcessing}
                         className={`review-chip-btn ${isSelected ? 'active-chip' : ''}`}
-                        onClick={() => {
-                          setTopText(hook);
-                        }}
-                        title="Click to apply to video"
+                        onClick={() => setTopText(hook)}
+                        title="Click to apply"
                       >
                         {hook}
                       </button>
@@ -423,6 +554,64 @@ export default function ShortsReviewModal({
                   })}
                 </div>
               </div>
+            </div>
+
+            {/* Countdown Timer Configuration (Samaksh Gaming Mode) */}
+            <div className="review-field-group">
+              <div className="review-field-header">
+                <label className="review-field-label">
+                  <Timer size={13} color="#facc15" />
+                  <span>Countdown Timer (First 5 Seconds)</span>
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <label className="timer-toggle-label">
+                    <input
+                      type="checkbox"
+                      checked={showTimer}
+                      onChange={(e) => setShowTimer(e.target.checked)}
+                      disabled={isProcessing}
+                    />
+                    <span>Enable Timer</span>
+                  </label>
+                </div>
+              </div>
+
+              {showTimer && (
+                <div className="timer-options-row">
+                  <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Duration:</span>
+                  {[3, 5, 8, 10].map((sec) => (
+                    <button
+                      key={sec}
+                      type="button"
+                      disabled={isProcessing}
+                      className={`timer-sec-btn ${timerDuration === sec ? 'active' : ''}`}
+                      onClick={() => setTimerDuration(sec)}
+                    >
+                      {sec}s {sec === 5 ? '(Default)' : ''}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Bottom Call-To-Action Text */}
+            <div className="review-field-group">
+              <div className="review-field-header">
+                <label className="review-field-label">
+                  <MessageSquare size={13} color="#38bdf8" />
+                  <span>Bottom Call To Action (Below Video)</span>
+                </label>
+                <span className="review-tag-cyan">Comment Prompt</span>
+              </div>
+
+              <input
+                type="text"
+                value={bottomText}
+                onChange={(e) => setBottomText(e.target.value)}
+                placeholder="e.g. Comment your move 👇"
+                disabled={isProcessing}
+                className="review-input"
+              />
             </div>
 
             {/* Channel Handle Section */}
@@ -439,11 +628,35 @@ export default function ShortsReviewModal({
                 type="text"
                 value={handle}
                 onChange={(e) => setHandle(e.target.value)}
-                placeholder="e.g. @yourchannel"
+                placeholder="e.g. @SamakshGaming or @HasoDilKholK"
                 disabled={isProcessing}
                 className="review-input"
               />
             </div>
+
+            {/* Pinned Solution Helper (If solution detected by Gemini) */}
+            {solution && (
+              <div className="review-solution-card">
+                <div className="review-solution-header">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <BrainCircuit size={14} color="#38bdf8" />
+                    <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#f8fafc' }}>
+                      Solution for Pinned Comment:
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCopySolution}
+                    className="review-copy-btn"
+                    title="Copy solution text to paste into YouTube pinned comment"
+                  >
+                    {copiedSolution ? <Check size={11} color="#34d399" /> : <Copy size={11} />}
+                    <span>{copiedSolution ? 'Copied!' : 'Copy'}</span>
+                  </button>
+                </div>
+                <p className="review-solution-text">{solution}</p>
+              </div>
+            )}
 
             {/* Dynamic Real-time Processing & Success Card */}
             {(isProcessing || isSuccess) && (
