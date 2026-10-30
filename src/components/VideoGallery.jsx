@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Film, Clock, CheckCircle2, Download, Search, X, ArrowUpDown, Sparkles } from 'lucide-react';
+import { Film, Clock, CheckCircle2, Download, Search, X, ArrowUpDown, Sparkles, LayoutGrid, List, Type, Trash2 } from 'lucide-react';
 import VideoCard from './VideoCard.jsx';
 
 export default function VideoGallery({
@@ -15,6 +15,9 @@ export default function VideoGallery({
   const [localTab, setLocalTab] = useState('downloads');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('newest'); // 'newest' | 'oldest' | 'size_desc' | 'size_asc' | 'title'
+  const [viewMode, setViewMode] = useState(() => {
+    return localStorage.getItem('shorts_studio_view_mode') || 'grid';
+  });
 
   const downloadsCount = useMemo(() => files.filter((f) => f.category === 'downloads').length, [files]);
   const draftsCount = useMemo(() => files.filter((f) => f.category === 'drafts').length, [files]);
@@ -74,10 +77,33 @@ export default function VideoGallery({
     return sorted;
   }, [files, currentTab, searchQuery, sortBy]);
 
+  const cleanTitle = (name) => {
+    if (!name) return 'Video';
+    return name
+      .replace(/^Short\s*[-–—:]\s*/i, '')
+      .replace(/\[[a-zA-Z0-9_\-]{8,16}\]/g, '')
+      .replace(/\([a-zA-Z0-9_\-]{8,16}\)/g, '')
+      .replace(/\[Branded\]/gi, '')
+      .replace(/\.f\d+(\.[a-z0-9]+)?$/i, '')
+      .replace(/\.(mp4|mkv|webm)$/i, '')
+      .replace(/#shorts/gi, '')
+      .replace(/\bshorts\b/gi, '')
+      .trim();
+  };
+
+  const formatDuration = (sec) => {
+    if (!sec || isNaN(sec)) return null;
+    const s = Math.floor(sec);
+    const m = Math.floor(s / 60);
+    const rem = s % 60;
+    return `${m}:${String(rem).padStart(2, '0')}`;
+  };
+
   return (
     <div className="gallery-section">
-      {/* Gallery Header Row: Dynamic Category Toggle (Only tabs with >0 items) + Search & Sort */}
-      <div className="gallery-header-row">
+      {/* Compact Gallery Header Toolbar */}
+      <div className="gallery-header-row compact-toolbar">
+        {/* Dynamic Category Positive Tabs */}
         <div className="gallery-toggle-group">
           {downloadsCount > 0 && (
             <button
@@ -85,7 +111,7 @@ export default function VideoGallery({
               onClick={() => (setActiveTab ? setActiveTab('downloads') : setLocalTab('downloads'))}
               className={`gallery-toggle-btn ${currentTab === 'downloads' ? 'active-dl' : ''}`}
             >
-              <Download size={14} />
+              <Download size={13} />
               <span>Downloads</span>
               <span className="toggle-count-badge count-dl">
                 {downloadsCount}
@@ -99,7 +125,7 @@ export default function VideoGallery({
               onClick={() => (setActiveTab ? setActiveTab('drafts') : setLocalTab('drafts'))}
               className={`gallery-toggle-btn ${currentTab === 'drafts' ? 'active-drafts' : ''}`}
             >
-              <Clock size={14} />
+              <Clock size={13} />
               <span>Pre Ready Shorts</span>
               <span className="toggle-count-badge count-drafts">
                 {draftsCount}
@@ -113,7 +139,7 @@ export default function VideoGallery({
               onClick={() => (setActiveTab ? setActiveTab('ready') : setLocalTab('ready'))}
               className={`gallery-toggle-btn ${currentTab === 'ready' ? 'active-ready' : ''}`}
             >
-              <CheckCircle2 size={14} />
+              <CheckCircle2 size={13} />
               <span>Shorts</span>
               <span className="toggle-count-badge count-ready">
                 {readyCount}
@@ -122,11 +148,11 @@ export default function VideoGallery({
           )}
         </div>
 
-        {/* Search & Sort Controls */}
+        {/* Search, Sort & View Mode Switcher */}
         <div className="gallery-controls-group">
           {/* Real-time Search Box */}
-          <div className="gallery-search-box">
-            <Search size={14} className="search-icon" />
+          <div className="gallery-search-box compact">
+            <Search size={13} className="search-icon" />
             <input
               type="text"
               placeholder="Search..."
@@ -147,8 +173,8 @@ export default function VideoGallery({
           </div>
 
           {/* Sort By Dropdown */}
-          <div className="gallery-sort-wrap">
-            <ArrowUpDown size={13} className="sort-icon" />
+          <div className="gallery-sort-wrap compact">
+            <ArrowUpDown size={12} className="sort-icon" />
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
@@ -161,16 +187,42 @@ export default function VideoGallery({
               <option value="title">Title (A-Z)</option>
             </select>
           </div>
+
+          {/* View Mode Toggle: Compact Grid vs Dense List */}
+          <div className="gallery-view-mode-toggle">
+            <button
+              type="button"
+              onClick={() => {
+                setViewMode('grid');
+                localStorage.setItem('shorts_studio_view_mode', 'grid');
+              }}
+              className={`view-toggle-btn ${viewMode === 'grid' ? 'active' : ''}`}
+              title="Compact Grid View"
+            >
+              <LayoutGrid size={13} />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setViewMode('list');
+                localStorage.setItem('shorts_studio_view_mode', 'list');
+              }}
+              className={`view-toggle-btn ${viewMode === 'list' ? 'active' : ''}`}
+              title="Dense List View (YouTube Studio)"
+            >
+              <List size={13} />
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Videos Grid / Empty State */}
+      {/* Videos View Area */}
       {filteredAndSortedFiles.length === 0 ? (
         <div className="gallery-empty-container">
           {searchQuery ? (
             <div className="gallery-empty-card">
               <div className="empty-icon-bubble">
-                <Search size={26} color="#ef4444" />
+                <Search size={24} color="#ef4444" />
               </div>
               <h3 className="empty-title">No matching videos</h3>
               <p className="empty-desc">
@@ -187,15 +239,15 @@ export default function VideoGallery({
           ) : currentTab === 'drafts' ? (
             <div className="gallery-empty-card">
               <div className="empty-icon-bubble bubble-amber">
-                <Clock size={26} color="#f59e0b" />
+                <Clock size={24} color="#f59e0b" />
               </div>
               <h3 className="empty-title">
-                {activeChannel === 'samaksh_gaming' ? 'No Gaming Clips Uploaded Yet' : 'No Pre-Ready Shorts Yet'}
+                {activeChannel === 'samaksh_gaming' ? 'No Gaming Clips Uploaded' : 'No Pre-Ready Shorts Yet'}
               </h3>
               <p className="empty-desc">
                 {activeChannel === 'samaksh_gaming'
-                  ? 'Drag & drop a chess puzzle or silent gaming clip onto the left panel to analyze moves and add countdown timers!'
-                  : 'Download a video to auto-extract viral clips, or select any video from the Downloads tab and click "Shorts".'}
+                  ? 'Drag & drop a chess puzzle or gaming clip into the upload box on the left.'
+                  : 'Download a video to auto-extract viral clips, or select any video from Downloads.'}
               </p>
               {files.some((f) => f.category === 'downloads') && (
                 <button
@@ -211,15 +263,15 @@ export default function VideoGallery({
           ) : currentTab === 'ready' ? (
             <div className="gallery-empty-card">
               <div className="empty-icon-bubble bubble-green">
-                <Sparkles size={26} color="#10b981" />
+                <Sparkles size={24} color="#10b981" />
               </div>
               <h3 className="empty-title">
                 {activeChannel === 'samaksh_gaming' ? 'No Ready Gaming Shorts Yet' : 'No Ready Shorts Yet'}
               </h3>
               <p className="empty-desc">
                 {activeChannel === 'samaksh_gaming'
-                  ? 'Go to Pre Ready Shorts, review your clip with the 5s timer and "Comment your move" CTA, then click "Apply to Video".'
-                  : 'Go to Pre Ready Shorts, review the moment, choose your viral hook and channel watermark, then click "Apply to Video".'}
+                  ? 'Open Pre Ready Shorts, review your clip with the 5s countdown timer, and render the final Short.'
+                  : 'Open Pre Ready Shorts, customize your viral hook and channel watermark, then render.'}
               </p>
               {files.some((f) => f.category === 'drafts') && (
                 <button
@@ -235,15 +287,15 @@ export default function VideoGallery({
           ) : (
             <div className="gallery-empty-card">
               <div className="empty-icon-bubble bubble-blue">
-                <Download size={26} color="#38bdf8" />
+                <Download size={24} color="#38bdf8" />
               </div>
               <h3 className="empty-title">
-                {activeChannel === 'samaksh_gaming' ? 'Samaksh Gaming Uses Direct Uploads' : 'No Source Videos Downloaded'}
+                {activeChannel === 'samaksh_gaming' ? 'Direct Uploads for Samaksh Gaming' : 'No Source Videos Downloaded'}
               </h3>
               <p className="empty-desc">
                 {activeChannel === 'samaksh_gaming'
-                  ? 'Samaksh Gaming is designed for direct silent video clip uploads. Use the left panel to upload your video clips directly into Pre-Ready Shorts.'
-                  : 'Paste any YouTube or Shorts URL on the left panel to begin downloading high-quality 1080p source video.'}
+                  ? 'Samaksh Gaming clips are uploaded directly to Pre-Ready Shorts using the uploader on the left.'
+                  : 'Paste any YouTube or Shorts link on the left to download high-resolution source video.'}
               </p>
               {activeChannel === 'samaksh_gaming' && (
                 <button
@@ -258,7 +310,133 @@ export default function VideoGallery({
             </div>
           )}
         </div>
+      ) : viewMode === 'list' ? (
+        /* Dense List View (YouTube Studio style) */
+        <div className="gallery-list-view">
+          {filteredAndSortedFiles.map((file, idx) => {
+            const isShort =
+              file.category === 'drafts' ||
+              file.category === 'ready' ||
+              file.name.startsWith('Short -') ||
+              /#shorts|\bshorts\b/i.test(file.name);
+            const displayTitle = file.title || cleanTitle(file.name);
+            const formattedDate = new Date(file.mtime).toLocaleDateString(undefined, {
+              month: 'short',
+              day: 'numeric'
+            });
+
+            return (
+              <div key={`${file.name}-${idx}`} className="video-list-row">
+                {/* Mini Player / Thumbnail */}
+                <div className={`list-preview-wrap ${isShort ? 'short-preview' : 'landscape-preview'}`}>
+                  <video
+                    src={file.url}
+                    preload="metadata"
+                    muted
+                    playsInline
+                    className="list-mini-video"
+                  />
+                  {file.duration && (
+                    <span className="list-duration-pill">{formatDuration(file.duration)}</span>
+                  )}
+                </div>
+
+                {/* Main Info */}
+                <div className="list-main-info">
+                  <div className="list-title-row">
+                    <span className="list-video-title" title={displayTitle}>
+                      {displayTitle}
+                    </span>
+                    {file.category === 'ready' ? (
+                      <span className="list-cat-pill ready">Shorts</span>
+                    ) : file.category === 'drafts' ? (
+                      <span className="list-cat-pill draft">Pre Ready</span>
+                    ) : (
+                      <span className="list-cat-pill dl">Source</span>
+                    )}
+                  </div>
+                  <div className="list-sub-meta">
+                    <span className="list-filename">{file.name}</span>
+                    <span className="list-meta-dot">•</span>
+                    <span className="list-size">{formatFileSize(file.size)}</span>
+                    <span className="list-meta-dot">•</span>
+                    <span className="list-date">{formattedDate}</span>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="list-actions-wrap">
+                  {file.category === 'ready' ? (
+                    <>
+                      <a
+                        href={file.url}
+                        download={file.name}
+                        className="list-action-btn-primary"
+                        title="Download 1080p Short"
+                      >
+                        <Download size={13} />
+                        <span>Download</span>
+                      </a>
+                      {onReviewShort && (
+                        <button
+                          type="button"
+                          onClick={() => onReviewShort(file)}
+                          className="list-action-btn-ghost"
+                          title="Edit Hook or Branding"
+                        >
+                          <Type size={12} />
+                          <span>Edit</span>
+                        </button>
+                      )}
+                    </>
+                  ) : file.category === 'drafts' && onReviewShort ? (
+                    <button
+                      type="button"
+                      onClick={() => onReviewShort(file)}
+                      className="list-action-btn-amber"
+                      title="Add Hook Text, 5s Timer & Branding"
+                    >
+                      <Sparkles size={13} />
+                      <span>Add Text & Brand</span>
+                    </button>
+                  ) : onGenerateShorts ? (
+                    <button
+                      type="button"
+                      onClick={() => onGenerateShorts(file)}
+                      className="list-action-btn-cyan"
+                      title="Detect viral moments & generate 9:16 vertical Shorts"
+                    >
+                      <Sparkles size={13} />
+                      <span>Generate Shorts</span>
+                    </button>
+                  ) : null}
+
+                  <a
+                    href={file.url}
+                    download={file.name}
+                    className="list-icon-btn"
+                    title="Download file"
+                  >
+                    <Download size={13} />
+                  </a>
+
+                  {onDeleteVideo && (
+                    <button
+                      type="button"
+                      onClick={() => onDeleteVideo(file)}
+                      className="list-icon-btn delete"
+                      title="Delete video"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       ) : (
+        /* Compact Grid View */
         <div className={`video-grid ${currentTab === 'downloads' ? 'grid-landscape' : 'grid-shorts'}`}>
           {filteredAndSortedFiles.map((file, idx) => (
             <VideoCard

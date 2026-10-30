@@ -5,7 +5,6 @@ import DownloadForm from './components/DownloadForm.jsx';
 import DownloadProgress from './components/DownloadProgress.jsx';
 import VideoGallery from './components/VideoGallery.jsx';
 import ShortsGeneratorSidebar from './components/ShortsGeneratorSidebar.jsx';
-import ChannelSelector from './components/ChannelSelector.jsx';
 import VideoUploader from './components/VideoUploader.jsx';
 import SettingsDrawer from './components/SettingsDrawer.jsx';
 
@@ -579,18 +578,10 @@ export default function App() {
 
   return (
     <div className="container" onPaste={handlePasteEvent}>
-      {/* Top Navbar */}
+      {/* Top Navbar with Centered Channel Switcher */}
       <Header
-        apiKey={apiKey}
-        onOpenApiKeyModal={() => {
-          setSettingsInitialTab('ai');
-          setIsSettingsOpen(true);
-        }}
-        channelHandle={channelHandle}
-        onOpenChannelModal={() => {
-          setSettingsInitialTab('channels');
-          setIsSettingsOpen(true);
-        }}
+        activeChannel={activeChannel}
+        onSelectChannel={handleSelectChannel}
         onOpenSettings={() => {
           setSettingsInitialTab('channels');
           setIsSettingsOpen(true);
@@ -600,12 +591,6 @@ export default function App() {
       <div className="dashboard-layout">
         {/* LEFT SIDE: All Input and Processing */}
         <aside className="dashboard-left">
-          {/* Dual Channel Switcher: Haso Dil Khol K vs Samaksh Gaming */}
-          <ChannelSelector
-            activeChannel={activeChannel}
-            onSelectChannel={handleSelectChannel}
-          />
-
           {/* Mode 1: Samaksh Gaming Direct Clip Uploader */}
           {activeChannel === 'samaksh_gaming' ? (
             <VideoUploader
@@ -667,56 +652,20 @@ export default function App() {
             />
           </div>
 
-          {/* Workspace Summary Card - Reflects active channel's files */}
-          <div className="studio-card studio-stats-card compact-card">
-            <div className="stats-header-row">
-              <div className="stats-title-wrap">
-                <HardDrive size={14} color="#38bdf8" />
-                <span className="stats-card-title">Studio Library</span>
-              </div>
-              <span className="stats-total-pill">
-                {channelFiles.length} Videos
+          {/* Compact Studio Library Summary Pill */}
+          <div className="compact-library-bar">
+            <div className="compact-lib-left">
+              <HardDrive size={13} color="#38bdf8" />
+              <span className="compact-lib-label">Channel Library</span>
+            </div>
+            <div className="compact-lib-right">
+              <span className="compact-lib-badge">
+                {channelFiles.length} {channelFiles.length === 1 ? 'file' : 'files'}
               </span>
-            </div>
-
-            <div className="stats-pills-grid">
-              <div
-                className={`stat-box ${activeTab === 'downloads' ? 'stat-box-active' : ''}`}
-                onClick={() => setActiveTab('downloads')}
-                title="View Source Downloads"
-              >
-                <span className="stat-box-num text-cyan">
-                  {channelFiles.filter((f) => f.category === 'downloads').length}
-                </span>
-                <span className="stat-box-label">Sources</span>
-              </div>
-
-              <div
-                className={`stat-box ${activeTab === 'drafts' ? 'stat-box-active' : ''}`}
-                onClick={() => setActiveTab('drafts')}
-                title="View Pre-Ready Shorts"
-              >
-                <span className="stat-box-num text-amber">
-                  {channelFiles.filter((f) => f.category === 'drafts').length}
-                </span>
-                <span className="stat-box-label">Pre-Ready</span>
-              </div>
-
-              <div
-                className={`stat-box ${activeTab === 'ready' ? 'stat-box-active' : ''}`}
-                onClick={() => setActiveTab('ready')}
-                title="View Ready Shorts"
-              >
-                <span className="stat-box-num text-emerald">
-                  {channelFiles.filter((f) => f.category === 'ready').length}
-                </span>
-                <span className="stat-box-label">Shorts</span>
-              </div>
-            </div>
-
-            <div className="stats-storage-row">
-              <span>Total Size</span>
-              <strong>{formatFileSize(channelFiles.reduce((acc, f) => acc + (f.size || 0), 0))}</strong>
+              <span className="compact-lib-dot">•</span>
+              <span className="compact-lib-size">
+                {formatFileSize(channelFiles.reduce((acc, f) => acc + (f.size || 0), 0))}
+              </span>
             </div>
           </div>
         </aside>
