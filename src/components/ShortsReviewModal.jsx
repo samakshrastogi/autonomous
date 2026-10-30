@@ -381,6 +381,11 @@ export default function ShortsReviewModal({
     ? Math.max(0, Math.ceil(timerEndSec - currentTime))
     : (isTimerPending ? timerDurationSec : 0);
 
+  const formatTimerDigits = (val) => {
+    const num = Math.max(0, Number(val) || 0);
+    return num < 10 ? `0${num}s` : `${num}s`;
+  };
+
   const timerTopPercent = Math.min(18.5, Number(topOffset) + 8.5);
 
   return (
@@ -524,14 +529,14 @@ export default function ShortsReviewModal({
                 {/* Live Overlay 2: Countdown Timer Badge (Gaming Mode) */}
                 {showTimer && (
                   <div className="shorts-overlay-timer" style={{ top: `${timerTopPercent}%` }}>
-                    <div className={`shorts-timer-badge ${isTimerPending ? 'pending' : isTimerExpired ? 'expired' : 'active'}`}>
+                    <div className={`shorts-timer-badge ${isTimerExpired ? 'expired' : 'active'}`}>
                       <span className="timer-icon">⏳</span>
                       <span className="timer-digits">
                         {isTimerPending
-                          ? `0${timerDurationSec}s (Starts at ${timerDelaySec}s)`
+                          ? formatTimerDigits(timerDurationSec)
                           : isTimerExpired
                           ? "TIME'S UP! 🔥"
-                          : `0${timerRemaining}s`}
+                          : formatTimerDigits(timerRemaining)}
                       </span>
                     </div>
                   </div>

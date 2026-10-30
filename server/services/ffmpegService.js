@@ -456,7 +456,7 @@ export async function burnTextToShort({
     const sourceFound = meta.sourceVideo ? findVideoFile(meta.sourceVideo) : null;
     const overlayEnable = (hookDuration && hookDuration > 0) ? `:enable='between(t,0,${hookDuration})'` : '';
 
-    // Countdown timer filter with configurable start delay (default 2s for gaming) & safe letterbox coordinates
+    // Countdown timer filter: shows selected time until start delay, then actively counts down
     const timerSec = Number(timerDuration) || 0;
     const delaySec = timerDelay !== undefined && timerDelay !== null && !isNaN(Number(timerDelay))
       ? Number(timerDelay)
@@ -470,9 +470,19 @@ export async function burnTextToShort({
     const topPx = Math.round((effectiveTopOffset / 100) * 1920);
     const timerY = Math.min(340, Math.max(220, topPx + 160));
 
-    const timerDrawFilter = hasTimer
-      ? `drawtext=fontfile='/Windows/Fonts/arialbd.ttf':text='⏳ 0%{eif\\:max(1\\, ${endSec}-t)\\:d}s':x=(w-tw)/2:y=${timerY}:fontsize=48:fontcolor=0xfacc15:box=1:boxcolor=0x000000D0:boxborderw=16:enable='between(t\\,${delaySec}\\,${endSec})',drawtext=fontfile='/Windows/Fonts/arialbd.ttf':text='TIME UP! 🔥':x=(w-tw)/2:y=${timerY}:fontsize=48:fontcolor=0xef4444:box=1:boxcolor=0x000000D0:boxborderw=16:enable='between(t\\,${endSec}\\,${endSec + 1.8})'`
-      : '';
+    let timerDrawFilter = '';
+    if (hasTimer) {
+      const initialText = timerSec < 10 ? `0${timerSec}s` : `${timerSec}s`;
+      const staticPart = delaySec > 0
+        ? `drawtext=fontfile='/Windows/Fonts/arialbd.ttf':text='⏳ ${initialText}':x=(w-tw)/2:y=${timerY}:fontsize=48:fontcolor=0xfacc15:box=1:boxcolor=0x000000D0:boxborderw=16:enable='between(t\\,0\\,${delaySec})',`
+        : '';
+      const countdownPart = timerSec <= 9
+        ? `drawtext=fontfile='/Windows/Fonts/arialbd.ttf':text='⏳ 0%{eif\\:max(1\\, ${endSec}-t)\\:d}s':x=(w-tw)/2:y=${timerY}:fontsize=48:fontcolor=0xfacc15:box=1:boxcolor=0x000000D0:boxborderw=16:enable='between(t\\,${delaySec}\\,${endSec})'`
+        : `drawtext=fontfile='/Windows/Fonts/arialbd.ttf':text='⏳ %{eif\\:max(1\\, ${endSec}-t)\\:d}s':x=(w-tw)/2:y=${timerY}:fontsize=48:fontcolor=0xfacc15:box=1:boxcolor=0x000000D0:boxborderw=16:enable='between(t\\,${delaySec}\\,${endSec - 9})',drawtext=fontfile='/Windows/Fonts/arialbd.ttf':text='⏳ 0%{eif\\:max(1\\, ${endSec}-t)\\:d}s':x=(w-tw)/2:y=${timerY}:fontsize=48:fontcolor=0xfacc15:box=1:boxcolor=0x000000D0:boxborderw=16:enable='between(t\\,${endSec - 9}\\,${endSec})'`;
+      const timesUpPart = `drawtext=fontfile='/Windows/Fonts/arialbd.ttf':text='TIME UP! 🔥':x=(w-tw)/2:y=${timerY}:fontsize=48:fontcolor=0xef4444:box=1:boxcolor=0x000000D0:boxborderw=16:enable='between(t\\,${endSec}\\,${endSec + 1.8})'`;
+
+      timerDrawFilter = `${staticPart}${countdownPart},${timesUpPart}`;
+    }
 
     if (sourceFound && sourceFound.foundPath && fs.existsSync(sourceFound.foundPath) && meta.start && meta.end) {
       // Clean re-render from pristine source video
