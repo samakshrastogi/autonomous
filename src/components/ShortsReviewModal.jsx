@@ -18,8 +18,6 @@ import {
   MessageSquare,
   Copy,
   BrainCircuit,
-  Heart,
-  Share2,
   Laugh,
   HelpCircle,
   Shield,
@@ -493,13 +491,6 @@ export default function ShortsReviewModal({
                   >
                     {isMuted ? <VolumeX size={12} color="#f87171" /> : <Volume2 size={12} color="#38bdf8" />}
                   </button>
-                </div>
-
-                {/* Simulated YouTube Shorts Side Icons (Authentic look) */}
-                <div className="shorts-social-sidebar">
-                  <div className="social-icon-btn"><Heart size={15} /><span>Like</span></div>
-                  <div className="social-icon-btn"><MessageSquare size={15} /><span>Reply</span></div>
-                  <div className="social-icon-btn"><Share2 size={15} /><span>Share</span></div>
                 </div>
 
                 {/* Safe Zone Boundary Guide Lines (Protected 1:1 Chessboard Zone) */}
