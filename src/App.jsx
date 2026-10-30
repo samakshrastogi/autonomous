@@ -253,7 +253,17 @@ export default function App() {
     handleOpenReviewModal(short, short.hook);
   };
 
-  const handleBurnText = async ({ filename, topText, bottomText, channelHandle: customHandle, timerDuration, channel: burnChannel }) => {
+  const handleBurnText = async ({
+    filename,
+    topText,
+    bottomText,
+    channelHandle: customHandle,
+    timerDuration,
+    timerDelay,
+    topOffset,
+    bottomOffset,
+    channel: burnChannel
+  }) => {
     setIsBurningText(true);
     try {
       const res = await fetch('/api/burn-text', {
@@ -265,7 +275,10 @@ export default function App() {
           bottomText,
           channelHandle: customHandle,
           channel: burnChannel || activeChannel,
-          timerDuration
+          timerDuration,
+          timerDelay,
+          topOffset,
+          bottomOffset
         })
       });
 

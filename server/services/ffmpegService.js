@@ -82,12 +82,15 @@ export function wrapTextForShorts(text, maxCharsPerLine = 28) {
 
 // Helper: Build FFmpeg drawtext filter graph using UTF-8 text files
 // hookDuration: Number of seconds the retention hook is active at the start. 0 = visible across the whole video (default: 0)
-export function buildDrawTextFilters(topText, bottomText, tempFilesTracker, hookDuration = 0) {
+export function buildDrawTextFilters(topText, bottomText, tempFilesTracker, hookDuration = 0, topOffset = 6, bottomOffset = 4) {
   const filters = [];
   // Use Windows Segoe UI Emoji font to render full emojis without missing box glyphs
   const fontPath = fs.existsSync('C:/Windows/Fonts/seguiemj.ttf')
     ? '/Windows/Fonts/seguiemj.ttf'
     : '/Windows/Fonts/arialbd.ttf';
+
+  const topPx = Math.round((Number(topOffset || 6) / 100) * 1920);
+  const botPx = Math.round((Number(bottomOffset || 4) / 100) * 1920);
 
   if (topText && typeof topText === 'string' && topText.trim()) {
     // Wrap text into clean multi-line format matching the live editing preview (2-3 lines max, centered)
@@ -97,7 +100,7 @@ export function buildDrawTextFilters(topText, bottomText, tempFilesTracker, hook
     tempFilesTracker.push(topFile);
     const normalizedPath = topFile.replace(/\\/g, '/').replace(/^([A-Za-z]):/, '');
     const durationFilter = (hookDuration && hookDuration > 0) ? `:enable='between(t,0,${hookDuration})'` : '';
-    filters.push(`drawtext=fontfile='${fontPath}':textfile='${normalizedPath}':expansion=none:fontsize=48:line_spacing=16:text_align=C:fontcolor=yellow:borderw=2:bordercolor=black@0.8:box=1:boxcolor=black@0.75:boxborderw=20:x=(w-text_w)/2:y=280${durationFilter}`);
+    filters.push(`drawtext=fontfile='${fontPath}':textfile='${normalizedPath}':expansion=none:fontsize=48:line_spacing=16:text_align=C:fontcolor=yellow:borderw=2:bordercolor=black@0.8:box=1:boxcolor=black@0.75:boxborderw=20:x=(w-text_w)/2:y=${topPx}${durationFilter}`);
   }
 
   if (bottomText && typeof bottomText === 'string' && bottomText.trim()) {
@@ -109,7 +112,7 @@ export function buildDrawTextFilters(topText, bottomText, tempFilesTracker, hook
     fs.writeFileSync(botFile, cleanHandle, 'utf8');
     tempFilesTracker.push(botFile);
     const normalizedPath = botFile.replace(/\\/g, '/').replace(/^([A-Za-z]):/, '');
-    filters.push(`drawtext=fontfile='${fontPath}':textfile='${normalizedPath}':expansion=none:fontsize=38:line_spacing=10:text_align=C:fontcolor=white:box=1:boxcolor=black@0.55:boxborderw=14:x=(w-text_w)/2:y=1460`);
+    filters.push(`drawtext=fontfile='${fontPath}':textfile='${normalizedPath}':expansion=none:fontsize=38:line_spacing=10:text_align=C:fontcolor=white:box=1:boxcolor=black@0.55:boxborderw=14:x=(w-text_w)/2:y=h-${botPx + 100}`);
   }
 
   return filters.join(',');
@@ -240,11 +243,22 @@ export function getBrowserExecutable() {
 // Generate an ultra-high resolution transparent overlay PNG via headless Chrome/Edge
 // This renders true full-color Unicode emojis (🤣, ♟️, 🤯, etc.), rounded corners, glowing borders,
 // and exact human-designed aesthetics matching the live React preview.
-export async function generateShortsOverlayPng({ topText, bottomText, channelHandle, outputPath }) {
+export async function generateShortsOverlayPng({
+  topText,
+  bottomText,
+  channelHandle,
+  topOffset = 6,
+  bottomOffset = 4,
+  isGaming = false,
+  outputPath
+}) {
   const browserPath = getBrowserExecutable();
   if (!browserPath) {
     throw new Error('No Chromium browser found for rendering overlay');
   }
+
+  const topPx = Math.round((Number(topOffset !== undefined ? topOffset : (isGaming ? 6 : 9)) / 100) * 1920);
+  const bottomPx = Math.round((Number(bottomOffset !== undefined ? bottomOffset : (isGaming ? 4 : 12)) / 100) * 1920);
 
   const wrappedText = wrapTextForShorts(topText, 28);
   const safeHandle = channelHandle && channelHandle.trim()
@@ -278,20 +292,20 @@ export async function generateShortsOverlayPng({ topText, bottomText, channelHan
   }
   .hook-title-card {
     position: absolute;
-    top: 250px;
+    top: ${topPx}px;
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(0, 0, 0, 0.85);
-    border: 3.5px solid rgba(250, 204, 21, 0.55);
+    background: rgba(0, 0, 0, 0.88);
+    border: 3.5px solid ${isGaming ? 'rgba(56, 189, 248, 0.75)' : 'rgba(250, 204, 21, 0.65)'};
     border-radius: 24px;
-    padding: 18px 36px;
-    box-shadow: 0 12px 38px rgba(0, 0, 0, 0.92);
+    padding: 16px 36px;
+    box-shadow: 0 12px 38px rgba(0, 0, 0, 0.94);
     max-width: 960px;
     text-align: center;
     width: max-content;
   }
   .hook-title-text {
-    color: #facc15;
+    color: ${isGaming ? '#38bdf8' : '#facc15'};
     font-weight: 800;
     font-size: 46px;
     line-height: 1.35;
@@ -301,7 +315,7 @@ export async function generateShortsOverlayPng({ topText, bottomText, channelHan
   }
   .bottom-branding-group {
     position: absolute;
-    bottom: 380px;
+    bottom: ${bottomPx}px;
     left: 50%;
     transform: translateX(-50%);
     display: flex;
@@ -312,7 +326,7 @@ export async function generateShortsOverlayPng({ topText, bottomText, channelHan
     max-width: 960px;
   }
   .cta-comment-pill {
-    background: rgba(15, 23, 42, 0.9);
+    background: rgba(15, 23, 42, 0.92);
     border: 3px solid rgba(56, 189, 248, 0.7);
     border-radius: 9999px;
     padding: 16px 36px;
@@ -325,7 +339,7 @@ export async function generateShortsOverlayPng({ topText, bottomText, channelHan
     white-space: nowrap;
   }
   .watermark-pill {
-    background: rgba(0, 0, 0, 0.78);
+    background: rgba(0, 0, 0, 0.82);
     border: 2px solid rgba(255, 255, 255, 0.4);
     border-radius: 9999px;
     padding: 10px 28px;
@@ -335,6 +349,9 @@ export async function generateShortsOverlayPng({ topText, bottomText, channelHan
     font-weight: 700;
     letter-spacing: 0.02em;
     text-align: center;
+    width: max-content;
+  }
+</style>
     width: max-content;
   }
 </style>
@@ -388,7 +405,11 @@ export async function burnTextToShort({
   tempOutputPath,
   finalReadyPath,
   hookDuration = 0,
-  timerDuration = 0
+  timerDuration = 0,
+  timerDelay = 0,
+  topOffset,
+  bottomOffset,
+  channel
 }) {
   const tempFilesTracker = [];
   try {
@@ -400,6 +421,14 @@ export async function burnTextToShort({
     }
 
     let meta = readVideoMetadata(videoPath);
+    const isGamingChannel = channel === 'samaksh_gaming' || (channelHandle && channelHandle.toLowerCase().includes('gaming'));
+
+    const effectiveTopOffset = topOffset !== undefined && !isNaN(Number(topOffset))
+      ? Number(topOffset)
+      : (isGamingChannel ? 6 : 9);
+    const effectiveBottomOffset = bottomOffset !== undefined && !isNaN(Number(bottomOffset))
+      ? Number(bottomOffset)
+      : (isGamingChannel ? 4 : 12);
 
     // Generate high-resolution transparent overlay PNG via headless Chrome/Edge for genuine human design & full-color emojis
     const overlayPngPath = path.join(DEFAULT_DOWNLOAD_DIR, `overlay_${Date.now()}_${Math.random().toString(36).substring(7)}.png`);
@@ -411,6 +440,9 @@ export async function burnTextToShort({
         topText: hasTop ? topText : '',
         bottomText: hasBottom ? bottomText : '',
         channelHandle: hasHandle ? channelHandle : '',
+        topOffset: effectiveTopOffset,
+        bottomOffset: effectiveBottomOffset,
+        isGaming: isGamingChannel,
         outputPath: overlayPngPath
       });
       if (fs.existsSync(overlayPngPath) && fs.statSync(overlayPngPath).size > 1000) {
@@ -424,11 +456,22 @@ export async function burnTextToShort({
     const sourceFound = meta.sourceVideo ? findVideoFile(meta.sourceVideo) : null;
     const overlayEnable = (hookDuration && hookDuration > 0) ? `:enable='between(t,0,${hookDuration})'` : '';
 
-    // 5-second countdown timer filter if enabled
+    // Countdown timer filter with configurable start delay (default 2s for gaming) & safe letterbox coordinates
     const timerSec = Number(timerDuration) || 0;
+    const delaySec = timerDelay !== undefined && timerDelay !== null && !isNaN(Number(timerDelay))
+      ? Number(timerDelay)
+      : (isGamingChannel ? 2 : 0);
     const hasTimer = timerSec > 0;
+    const endSec = delaySec + timerSec;
+
+    // Chessboard in 1080x1920 occupies y=420 to y=1500 (21.875% to 78.125%).
+    // Top letterbox is y=0 to y=420.
+    // Placing timer at y=295 ensures it stays comfortably in the top letterbox and ~125px ABOVE the chessboard!
+    const topPx = Math.round((effectiveTopOffset / 100) * 1920);
+    const timerY = Math.min(340, Math.max(220, topPx + 160));
+
     const timerDrawFilter = hasTimer
-      ? `drawtext=fontfile='/Windows/Fonts/arialbd.ttf':text='⏳ 0%{eif\\:max(1\\, ${timerSec}-t)\\:d}s':x=(w-tw)/2:y=470:fontsize=48:fontcolor=0xfacc15:box=1:boxcolor=0x000000D0:boxborderw=16:enable='between(t\\,0\\,${timerSec})',drawtext=fontfile='/Windows/Fonts/arialbd.ttf':text='TIME UP! 🔥':x=(w-tw)/2:y=470:fontsize=48:fontcolor=0xef4444:box=1:boxcolor=0x000000D0:boxborderw=16:enable='between(t\\,${timerSec}\\,${timerSec + 1.5})'`
+      ? `drawtext=fontfile='/Windows/Fonts/arialbd.ttf':text='⏳ 0%{eif\\:max(1\\, ${endSec}-t)\\:d}s':x=(w-tw)/2:y=${timerY}:fontsize=48:fontcolor=0xfacc15:box=1:boxcolor=0x000000D0:boxborderw=16:enable='between(t\\,${delaySec}\\,${endSec})',drawtext=fontfile='/Windows/Fonts/arialbd.ttf':text='TIME UP! 🔥':x=(w-tw)/2:y=${timerY}:fontsize=48:fontcolor=0xef4444:box=1:boxcolor=0x000000D0:boxborderw=16:enable='between(t\\,${endSec}\\,${endSec + 1.8})'`
       : '';
 
     if (sourceFound && sourceFound.foundPath && fs.existsSync(sourceFound.foundPath) && meta.start && meta.end) {
@@ -439,7 +482,7 @@ export async function burnTextToShort({
           : `split[a][b];[a]scale=180:320:force_original_aspect_ratio=increase,crop=180:320,boxblur=5:2,scale=1080:1920[bg];[b]scale=1080:-1[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2[base];[base][1:v]overlay=0:0${overlayEnable}`;
         ffmpegCmd = `ffmpeg -ss ${meta.start} -to ${meta.end} -i "${sourceFound.foundPath}" -i "${overlayPngPath}" -filter_complex "${filterGraph}" -preset ultrafast -c:v libx264 -crf 23 -c:a aac -threads 0 -y "${tempOutputPath}"`;
       } else {
-        const drawFilters = buildDrawTextFilters(topText, channelHandle, tempFilesTracker, hookDuration);
+        const drawFilters = buildDrawTextFilters(topText, channelHandle, tempFilesTracker, hookDuration, effectiveTopOffset, effectiveBottomOffset);
         const filterGraph = `split[a][b];[a]scale=180:320:force_original_aspect_ratio=increase,crop=180:320,boxblur=5:2,scale=1080:1920[bg];[b]scale=1080:-1[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,${drawFilters}`;
         ffmpegCmd = `ffmpeg -ss ${meta.start} -to ${meta.end} -i "${sourceFound.foundPath}" -vf "${filterGraph}" -preset ultrafast -c:v libx264 -crf 23 -c:a aac -threads 0 -y "${tempOutputPath}"`;
       }
@@ -451,7 +494,7 @@ export async function burnTextToShort({
           : `[0:v][1:v]overlay=0:0${overlayEnable}`;
         ffmpegCmd = `ffmpeg -i "${videoPath}" -i "${overlayPngPath}" -filter_complex "${filterGraph}" -preset ultrafast -c:v libx264 -crf 23 -c:a copy -threads 0 -y "${tempOutputPath}"`;
       } else {
-        const drawFilters = buildDrawTextFilters(topText, channelHandle, tempFilesTracker, hookDuration);
+        const drawFilters = buildDrawTextFilters(topText, channelHandle, tempFilesTracker, hookDuration, effectiveTopOffset, effectiveBottomOffset);
         ffmpegCmd = `ffmpeg -i "${videoPath}" -vf "${drawFilters}" -preset ultrafast -c:v libx264 -crf 23 -c:a copy -threads 0 -y "${tempOutputPath}"`;
       }
     }

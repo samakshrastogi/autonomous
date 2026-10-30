@@ -21,7 +21,12 @@ import {
   Heart,
   Share2,
   Laugh,
-  HelpCircle
+  HelpCircle,
+  Shield,
+  Sliders,
+  Eye,
+  EyeOff,
+  Move
 } from 'lucide-react';
 
 const cleanShortTitle = (rawName) => {
@@ -86,6 +91,10 @@ export default function ShortsReviewModal({
   const [handle, setHandle] = useState('');
   const [showTimer, setShowTimer] = useState(isGaming);
   const [timerDuration, setTimerDuration] = useState(5);
+  const [timerDelay, setTimerDelay] = useState(isGaming ? 2 : 0);
+  const [topOffset, setTopOffset] = useState(isGaming ? 6 : 9);
+  const [bottomOffset, setBottomOffset] = useState(isGaming ? 4 : 12);
+  const [showSafeZoneGuide, setShowSafeZoneGuide] = useState(false);
   const [solution, setSolution] = useState('');
   const [suggestedHooks, setSuggestedHooks] = useState(isGaming ? DEFAULT_GAMING_HOOKS : DEFAULT_FALLBACK_HOOKS);
   const [loadingHooks, setLoadingHooks] = useState(false);
@@ -243,6 +252,9 @@ export default function ShortsReviewModal({
       const isGamingMode = activeChannel === 'samaksh_gaming' || shortFile.channelMode === 'gaming';
       setShowTimer(isGamingMode);
       setTimerDuration(shortFile.timerDuration || 5);
+      setTimerDelay(shortFile.timerDelay !== undefined ? shortFile.timerDelay : (isGamingMode ? 2 : 0));
+      setTopOffset(shortFile.topOffset !== undefined ? shortFile.topOffset : (isGamingMode ? 6 : 9));
+      setBottomOffset(shortFile.bottomOffset !== undefined ? shortFile.bottomOffset : (isGamingMode ? 4 : 12));
       setBottomText(shortFile.bottomText || (isGamingMode ? 'Comment your move 👇' : ''));
       setSolution(shortFile.solution || '');
 
@@ -342,7 +354,10 @@ export default function ShortsReviewModal({
         bottomText: bottomText.trim(),
         channelHandle: cleanHandle,
         channel: activeChannel,
-        timerDuration: showTimer ? timerDuration : 0
+        timerDuration: showTimer ? timerDuration : 0,
+        timerDelay: showTimer ? timerDelay : 0,
+        topOffset,
+        bottomOffset
       });
       setIsSuccess(true);
       setProgressPercent(100);
@@ -355,8 +370,18 @@ export default function ShortsReviewModal({
   if (!isOpen || !shortFile) return null;
 
   const progressRatio = duration > 0 ? (currentTime / duration) * 100 : 0;
-  const timerRemaining = Math.max(0, Math.ceil(timerDuration - currentTime));
-  const isTimerExpired = currentTime > timerDuration;
+  const timerDelaySec = Number(timerDelay) || 0;
+  const timerDurationSec = Number(timerDuration) || 5;
+  const timerEndSec = timerDelaySec + timerDurationSec;
+
+  const isTimerPending = currentTime < timerDelaySec;
+  const isTimerActive = currentTime >= timerDelaySec && currentTime <= timerEndSec;
+  const isTimerExpired = currentTime > timerEndSec;
+  const timerRemaining = isTimerActive
+    ? Math.max(0, Math.ceil(timerEndSec - currentTime))
+    : (isTimerPending ? timerDurationSec : 0);
+
+  const timerTopPercent = Math.min(18.5, Number(topOffset) + 8.5);
 
   return (
     <div className="modal-overlay review-modal-overlay" onClick={() => !isProcessing && onClose()}>
@@ -472,9 +497,24 @@ export default function ShortsReviewModal({
                   <div className="social-icon-btn"><Share2 size={15} /><span>Share</span></div>
                 </div>
 
+                {/* Safe Zone Boundary Guide Lines (Protected 1:1 Chessboard Zone) */}
+                {showSafeZoneGuide && (
+                  <div className="safe-zone-overlay">
+                    <div className="safe-zone-line-top">
+                      <span className="safe-zone-pill-top">▲ Chessboard Top (Rank 8)</span>
+                    </div>
+                    <div className="safe-zone-board-highlight">
+                      <span className="safe-zone-board-tag">♟️ 1:1 Chessboard Protected Area (0% Overlay)</span>
+                    </div>
+                    <div className="safe-zone-line-bottom">
+                      <span className="safe-zone-pill-bottom">▼ Chessboard Bottom (Rank 1)</span>
+                    </div>
+                  </div>
+                )}
+
                 {/* Live Overlay 1: Top Hook / Puzzle Question Card */}
                 {topText.trim() && (
-                  <div className="shorts-overlay-top">
+                  <div className="shorts-overlay-top" style={{ top: `${topOffset}%` }}>
                     <div className={`shorts-hook-badge ${isGaming ? 'gaming-hook' : 'comedy-hook'}`}>
                       {topText}
                     </div>
@@ -483,11 +523,13 @@ export default function ShortsReviewModal({
 
                 {/* Live Overlay 2: Countdown Timer Badge (Gaming Mode) */}
                 {showTimer && (
-                  <div className="shorts-overlay-timer">
-                    <div className={`shorts-timer-badge ${isTimerExpired ? 'expired' : 'active'}`}>
+                  <div className="shorts-overlay-timer" style={{ top: `${timerTopPercent}%` }}>
+                    <div className={`shorts-timer-badge ${isTimerPending ? 'pending' : isTimerExpired ? 'expired' : 'active'}`}>
                       <span className="timer-icon">⏳</span>
                       <span className="timer-digits">
-                        {isTimerExpired
+                        {isTimerPending
+                          ? `0${timerDurationSec}s (Starts at ${timerDelaySec}s)`
+                          : isTimerExpired
                           ? "TIME'S UP! 🔥"
                           : `0${timerRemaining}s`}
                       </span>
@@ -497,7 +539,7 @@ export default function ShortsReviewModal({
 
                 {/* Live Overlay 3: Bottom Comment CTA + Channel Watermark */}
                 {(bottomText.trim() || handle.trim()) && (
-                  <div className="shorts-overlay-bottom">
+                  <div className="shorts-overlay-bottom" style={{ bottom: `${bottomOffset}%` }}>
                     {bottomText.trim() && (
                       <div className="shorts-comment-cta-pill">
                         💬 {bottomText}
@@ -521,7 +563,7 @@ export default function ShortsReviewModal({
               </div>
             </div>
 
-            {/* Stage Footer Status Indicators */}
+            {/* Stage Footer Status Indicators & Safe Zone Toggle */}
             <div className="review-preview-footer">
               <div className="review-preview-badge">
                 <span className="live-dot-pulse"></span>
@@ -531,9 +573,19 @@ export default function ShortsReviewModal({
               {showTimer && (
                 <div className="preview-hook-live-indicator">
                   <Timer size={11} />
-                  <span>{timerDuration}s Countdown Active</span>
+                  <span>{timerDuration}s Timer ({timerDelay > 0 ? `+${timerDelay}s delay` : 'instant'})</span>
                 </div>
               )}
+
+              <button
+                type="button"
+                className={`preview-guide-pill ${showSafeZoneGuide ? 'active' : ''}`}
+                onClick={() => setShowSafeZoneGuide(!showSafeZoneGuide)}
+                title="Toggle visual chessboard safe boundaries"
+              >
+                <Shield size={11} />
+                <span>{showSafeZoneGuide ? 'Hide Safe Zone' : 'Board Safe Zone'}</span>
+              </button>
             </div>
           </div>
 
@@ -641,22 +693,45 @@ export default function ShortsReviewModal({
               </div>
 
               {showTimer && (
-                <div className="timer-duration-row">
-                  <span className="field-hint">Timer Duration:</span>
-                  <div className="segmented-pill-row">
-                    {[3, 5, 8, 10].map((sec) => (
-                      <button
-                        key={sec}
-                        type="button"
-                        disabled={isProcessing}
-                        className={`segmented-sec-btn ${timerDuration === sec ? 'active' : ''}`}
-                        onClick={() => setTimerDuration(sec)}
-                      >
-                        {sec}s {sec === 5 ? '(Default)' : ''}
-                      </button>
-                    ))}
+                <>
+                  {/* Timer Start Delay Segmented Control */}
+                  <div className="timer-delay-control-block">
+                    <div className="delay-label-row">
+                      <span className="field-hint">⏱️ Timer Start Delay:</span>
+                      <span className="delay-help-tag">Starts after 2s board intro</span>
+                    </div>
+                    <div className="segmented-pill-row">
+                      {[0, 1, 2, 3, 4].map((sec) => (
+                        <button
+                          key={sec}
+                          type="button"
+                          disabled={isProcessing}
+                          className={`segmented-sec-btn ${timerDelay === sec ? 'active' : ''}`}
+                          onClick={() => setTimerDelay(sec)}
+                        >
+                          {sec}s {sec === 2 ? '(Chess Standard)' : sec === 0 ? '(Immediate)' : ''}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
+
+                  <div className="timer-duration-row">
+                    <span className="field-hint">Countdown Duration:</span>
+                    <div className="segmented-pill-row">
+                      {[3, 5, 8, 10].map((sec) => (
+                        <button
+                          key={sec}
+                          type="button"
+                          disabled={isProcessing}
+                          className={`segmented-sec-btn ${timerDuration === sec ? 'active' : ''}`}
+                          onClick={() => setTimerDuration(sec)}
+                        >
+                          {sec}s {sec === 5 ? '(Default)' : ''}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
               )}
 
               {/* Bottom Comment CTA Prompt */}
@@ -685,6 +760,89 @@ export default function ShortsReviewModal({
                     </button>
                   ))}
                 </div>
+              </div>
+            </div>
+
+            {/* Section: Board Safe Zone & Vertical Text Adjuster */}
+            <div className="review-card safe-zone-adjuster-card">
+              <div className="review-card-header">
+                <div className="review-card-label">
+                  <Sliders size={13} color="#38bdf8" />
+                  <span>Board Safe Zone & Text Adjuster</span>
+                </div>
+                <div className="safe-zone-status-pill">
+                  <Shield size={11} color="#34d399" />
+                  <span>Protected from Chessboard</span>
+                </div>
+              </div>
+
+              <p className="adjuster-desc">
+                Adjust vertical positions to keep all question text and countdown timers completely outside the 1:1 chessboard (Safe letterbox zones above and below board).
+              </p>
+
+              {/* Slider 1: Top Question & Timer */}
+              <div className="slider-control-group">
+                <div className="slider-label-row">
+                  <span className="slider-title">Top Question & Timer Distance:</span>
+                  <span className="slider-value-badge">{topOffset}% from top (Safe Zone: 4%–12%)</span>
+                </div>
+                <div className="slider-track-wrap">
+                  <input
+                    type="range"
+                    min="3"
+                    max="16"
+                    step="1"
+                    value={topOffset}
+                    onChange={(e) => setTopOffset(Number(e.target.value))}
+                    disabled={isProcessing}
+                    className="adjuster-range-slider"
+                  />
+                </div>
+              </div>
+
+              {/* Slider 2: Bottom CTA & Watermark */}
+              <div className="slider-control-group">
+                <div className="slider-label-row">
+                  <span className="slider-title">Bottom CTA & Watermark Distance:</span>
+                  <span className="slider-value-badge">{bottomOffset}% from bottom (Safe Zone: 2%–12%)</span>
+                </div>
+                <div className="slider-track-wrap">
+                  <input
+                    type="range"
+                    min="2"
+                    max="16"
+                    step="1"
+                    value={bottomOffset}
+                    onChange={(e) => setBottomOffset(Number(e.target.value))}
+                    disabled={isProcessing}
+                    className="adjuster-range-slider"
+                  />
+                </div>
+              </div>
+
+              {/* Quick Position Presets */}
+              <div className="adjuster-actions-row">
+                <button
+                  type="button"
+                  className="adjuster-preset-btn active"
+                  onClick={() => {
+                    setTopOffset(6);
+                    setBottomOffset(4);
+                  }}
+                  disabled={isProcessing}
+                  title="Snap to recommended safe margins (Zero chessboard overlap)"
+                >
+                  🎯 Auto-Fit Chessboard Safe Zone
+                </button>
+                <button
+                  type="button"
+                  className={`adjuster-guide-btn ${showSafeZoneGuide ? 'active' : ''}`}
+                  onClick={() => setShowSafeZoneGuide(!showSafeZoneGuide)}
+                  disabled={isProcessing}
+                >
+                  {showSafeZoneGuide ? <EyeOff size={12} /> : <Eye size={12} />}
+                  <span>{showSafeZoneGuide ? 'Hide Board Lines' : 'Show Board Lines'}</span>
+                </button>
               </div>
             </div>
 

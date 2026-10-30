@@ -480,7 +480,18 @@ router.post('/suggest-hooks', async (req, res) => {
 
 // Burn custom top hook text, bottom comment text (for 5s) & channel handle
 router.post('/burn-text', async (req, res) => {
-  const { filename, topText, bottomText, channelHandle, channel, hookDuration = 0, timerDuration = 0 } = req.body;
+  const {
+    filename,
+    topText,
+    bottomText,
+    channelHandle,
+    channel,
+    hookDuration = 0,
+    timerDuration = 0,
+    timerDelay = 0,
+    topOffset,
+    bottomOffset
+  } = req.body;
   if (!filename) {
     return res.status(400).json({ error: 'Filename is required' });
   }
@@ -510,7 +521,11 @@ router.post('/burn-text', async (req, res) => {
       tempOutputPath,
       finalReadyPath,
       hookDuration: Number(hookDuration) || 0,
-      timerDuration: Number(timerDuration) || 0
+      timerDuration: Number(timerDuration) || 0,
+      timerDelay: Number(timerDelay) || 0,
+      topOffset: topOffset !== undefined ? Number(topOffset) : undefined,
+      bottomOffset: bottomOffset !== undefined ? Number(bottomOffset) : undefined,
+      channel: channel || fileInfo.channel
     });
 
     // Update metadata and preserve channel association
@@ -521,6 +536,9 @@ router.post('/burn-text', async (req, res) => {
     if (channelHandle) meta.channelHandle = channelHandle;
     meta.channel = channel || sourceMeta.channel || (channelHandle?.includes('Gaming') ? 'samaksh_gaming' : 'haso_dil_khol_k');
     meta.timerDuration = Number(timerDuration) || 0;
+    meta.timerDelay = Number(timerDelay) || 0;
+    if (topOffset !== undefined) meta.topOffset = Number(topOffset);
+    if (bottomOffset !== undefined) meta.bottomOffset = Number(bottomOffset);
     saveVideoMetadata(finalReadyPath, meta);
 
     broadcastFilesUpdate();
