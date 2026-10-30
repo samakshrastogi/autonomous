@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Film, Clock, CheckCircle2, Download, Search, X, ArrowUpDown, Sparkles } from 'lucide-react';
 import VideoCard from './VideoCard.jsx';
 
@@ -16,8 +16,35 @@ export default function VideoGallery({
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('newest'); // 'newest' | 'oldest' | 'size_desc' | 'size_asc' | 'title'
 
+  const downloadsCount = useMemo(() => files.filter((f) => f.category === 'downloads').length, [files]);
+  const draftsCount = useMemo(() => files.filter((f) => f.category === 'drafts').length, [files]);
+  const readyCount = useMemo(() => files.filter((f) => f.category === 'ready').length, [files]);
+
   // Current category tab
-  const currentTab = (setActiveTab ? activeTab : localTab) === 'all' ? 'downloads' : (setActiveTab ? activeTab : localTab);
+  const rawTab = (setActiveTab ? activeTab : localTab) === 'all' ? 'downloads' : (setActiveTab ? activeTab : localTab);
+  const currentTab = rawTab;
+
+  // Auto-switch to the first category that has >0 items if current tab is empty
+  useEffect(() => {
+    const counts = {
+      downloads: downloadsCount,
+      drafts: draftsCount,
+      ready: readyCount
+    };
+
+    if (counts[currentTab] === 0) {
+      if (counts.drafts > 0) {
+        if (setActiveTab) setActiveTab('drafts');
+        else setLocalTab('drafts');
+      } else if (counts.ready > 0) {
+        if (setActiveTab) setActiveTab('ready');
+        else setLocalTab('ready');
+      } else if (counts.downloads > 0) {
+        if (setActiveTab) setActiveTab('downloads');
+        else setLocalTab('downloads');
+      }
+    }
+  }, [downloadsCount, draftsCount, readyCount, currentTab, setActiveTab]);
 
   // Filter and sort files
   const filteredAndSortedFiles = useMemo(() => {
@@ -49,44 +76,50 @@ export default function VideoGallery({
 
   return (
     <div className="gallery-section">
-      {/* Gallery Header Row: 3-Way Segmented Category Toggle (Right Side) + Search & Sort */}
+      {/* Gallery Header Row: Dynamic Category Toggle (Only tabs with >0 items) + Search & Sort */}
       <div className="gallery-header-row">
         <div className="gallery-toggle-group">
-          <button
-            type="button"
-            onClick={() => (setActiveTab ? setActiveTab('downloads') : setLocalTab('downloads'))}
-            className={`gallery-toggle-btn ${currentTab === 'downloads' ? 'active-dl' : ''}`}
-          >
-            <Download size={14} />
-            <span>Downloads</span>
-            <span className="toggle-count-badge count-dl">
-              {files.filter((f) => f.category === 'downloads').length}
-            </span>
-          </button>
+          {downloadsCount > 0 && (
+            <button
+              type="button"
+              onClick={() => (setActiveTab ? setActiveTab('downloads') : setLocalTab('downloads'))}
+              className={`gallery-toggle-btn ${currentTab === 'downloads' ? 'active-dl' : ''}`}
+            >
+              <Download size={14} />
+              <span>Downloads</span>
+              <span className="toggle-count-badge count-dl">
+                {downloadsCount}
+              </span>
+            </button>
+          )}
 
-          <button
-            type="button"
-            onClick={() => (setActiveTab ? setActiveTab('drafts') : setLocalTab('drafts'))}
-            className={`gallery-toggle-btn ${currentTab === 'drafts' ? 'active-drafts' : ''}`}
-          >
-            <Clock size={14} />
-            <span>Pre Ready Shorts</span>
-            <span className="toggle-count-badge count-drafts">
-              {files.filter((f) => f.category === 'drafts').length}
-            </span>
-          </button>
+          {draftsCount > 0 && (
+            <button
+              type="button"
+              onClick={() => (setActiveTab ? setActiveTab('drafts') : setLocalTab('drafts'))}
+              className={`gallery-toggle-btn ${currentTab === 'drafts' ? 'active-drafts' : ''}`}
+            >
+              <Clock size={14} />
+              <span>Pre Ready Shorts</span>
+              <span className="toggle-count-badge count-drafts">
+                {draftsCount}
+              </span>
+            </button>
+          )}
 
-          <button
-            type="button"
-            onClick={() => (setActiveTab ? setActiveTab('ready') : setLocalTab('ready'))}
-            className={`gallery-toggle-btn ${currentTab === 'ready' ? 'active-ready' : ''}`}
-          >
-            <CheckCircle2 size={14} />
-            <span>Shorts</span>
-            <span className="toggle-count-badge count-ready">
-              {files.filter((f) => f.category === 'ready').length}
-            </span>
-          </button>
+          {readyCount > 0 && (
+            <button
+              type="button"
+              onClick={() => (setActiveTab ? setActiveTab('ready') : setLocalTab('ready'))}
+              className={`gallery-toggle-btn ${currentTab === 'ready' ? 'active-ready' : ''}`}
+            >
+              <CheckCircle2 size={14} />
+              <span>Shorts</span>
+              <span className="toggle-count-badge count-ready">
+                {readyCount}
+              </span>
+            </button>
+          )}
         </div>
 
         {/* Search & Sort Controls */}
