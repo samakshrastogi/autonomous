@@ -469,9 +469,9 @@ router.post('/analyze-gaming', async (req, res) => {
 
 // Suggest 5 best viral hooks for a Short
 router.post('/suggest-hooks', async (req, res) => {
-  const { filename, title, apiKey, apiKeys } = req.body;
+  const { filename, title, apiKey, apiKeys, channel } = req.body;
   try {
-    const suggestedHooks = await generateSuggestedHooks({ filename, title, apiKey, apiKeys });
+    const suggestedHooks = await generateSuggestedHooks({ filename, title, apiKey, apiKeys, channel });
     res.json({ suggestedHooks });
   } catch (err) {
     res.status(500).json({ error: err.message });

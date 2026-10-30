@@ -288,14 +288,27 @@ Return ONLY a valid JSON array of objects with the exact schema:
 }
 
 // Generate 5 best viral hooks for a Short with key failover
-export async function generateSuggestedHooks({ filename, title, apiKey, apiKeys }) {
-  const defaultHooks = [
+export async function generateSuggestedHooks({ filename, title, apiKey, apiKeys, channel }) {
+  const isGaming = channel === 'samaksh_gaming' ||
+    (filename && (filename.toLowerCase().includes('chess') || filename.toLowerCase().includes('gaming') || filename.toLowerCase().includes('puzzle')));
+
+  const defaultComedyHooks = [
     "Wait for the end twist! 😱",
     "Reaction dekh ke hasi nahi rukegi 😂",
     "Bhai ne yeh kya bol diya?! 🤯",
     "Dhyan se dekho end me kya hua 👀",
     "Don't miss the climax! 🔥"
   ];
+
+  const defaultGamingHooks = [
+    "Can you solve this puzzle?! 🤯",
+    "White to move: Win in 2 moves! ♟️🔥",
+    "Find the winning move! 🧠⏳",
+    "Grandmaster Trap! What's the move? 👀",
+    "99% People Fail This Move! 😱"
+  ];
+
+  const defaultHooks = isGaming ? defaultGamingHooks : defaultComedyHooks;
 
   try {
     return await executeWithKeyRotation({
@@ -312,7 +325,20 @@ export async function generateSuggestedHooks({ filename, title, apiKey, apiKeys 
           .replace(/\.mp4$/i, '')
           .trim();
 
-        const prompt = `You are a viral YouTube Shorts / Reels expert for Indian audiences.
+        const prompt = isGaming
+          ? `You are an expert viral content creator for YouTube Shorts & Reels specializing in chess puzzles, brain teasers, and gaming clips.
+Given this video clip title: "${cleanName}", generate EXACTLY 5 best, ultra-exciting, high-engagement puzzle challenge hook text suggestions with emojis (under 40 characters each).
+Make them intriguing, competitive, and urge the viewer to pause and comment their answer.
+Examples:
+[
+  "Can you solve this puzzle?! 🤯",
+  "White to move: Win in 2 moves! ♟️🔥",
+  "Find the winning move! 🧠⏳",
+  "Grandmaster Trap! What's the move? 👀",
+  "99% People Fail This Move! 😱"
+]
+Return ONLY a valid JSON array of 5 strings.`
+          : `You are a viral YouTube Shorts / Reels expert for Indian audiences.
 Given this video scene title/topic: "${cleanName}", generate EXACTLY 5 best, punchy, high-retention viral hook text suggestions in conversational Hinglish (Hindi written in English alphabets with emojis).
 Make them diverse: one suspense/curiosity, one funny reaction, one unexpected twist, one relatable callout, one cliffhanger.
 Keep each hook under 40 characters.
